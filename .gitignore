@@ -22,6 +22,9 @@ env/
 .huggingface/
 hf_cache/
 
+# Local API tokens
+api_tokens/
+
 # Generated outputs
 activations/
 results/
