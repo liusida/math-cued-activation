@@ -137,6 +137,22 @@ def pending_rows(worker_args: argparse.Namespace, rows: list[dict], rerun_existi
     return pending
 
 
+def is_cuda_oom(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return "out of memory" in message and ("cuda" in message or "gpu" in message)
+
+
+def clear_cuda_cache() -> None:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+    except Exception:
+        pass
+
+
 def gpu_worker(
     gpu: str,
     worker_index: int,
@@ -165,6 +181,95 @@ def gpu_worker(
                 print(f"GPU worker {worker_index} starting on physical GPU {gpu}", flush=True)
                 model, tokenizer = load_model_and_tokenizer(args)
                 print(f"GPU worker {worker_index} model loaded", flush=True)
+                current_batch_size = max(1, batch_size)
+
+                def emit_results(
+                    tasks,
+                    *,
+                    ok: bool,
+                    seconds: float,
+                    correct: int = 0,
+                    error: str | None = None,
+                    effective_batch_size: int | None = None,
+                ) -> None:
+                    for task_number, problem_id in [(task[0], task[2]["Problem ID"]) for task in tasks]:
+                        result = {
+                            "ok": ok,
+                            "gpu": gpu,
+                            "worker_index": worker_index,
+                            "task_number": task_number,
+                            "problem_id": problem_id,
+                            "seconds": seconds,
+                            "batch_size": effective_batch_size or len(tasks),
+                        }
+                        if ok:
+                            result["correct"] = int(correct)
+                        if error is not None:
+                            result["error"] = error
+                        result_queue.put(result)
+
+                def run_task_batch(tasks) -> None:
+                    nonlocal current_batch_size
+                    task_numbers = [task[0] for task in tasks]
+                    total_tasks = tasks[0][1]
+                    rows = [task[2] for task in tasks]
+                    problem_ids = [row["Problem ID"] for row in rows]
+                    started = time.monotonic()
+                    print(
+                        f"GPU worker {worker_index} starting tasks "
+                        f"{task_numbers[0]}-{task_numbers[-1]}/{total_tasks} "
+                        f"batch={len(tasks)} active_batch_limit={current_batch_size}: "
+                        f"{', '.join(problem_ids)}",
+                        flush=True,
+                    )
+                    try:
+                        args.batch_size = len(tasks)
+                        correct = run_rows(
+                            args,
+                            rows,
+                            selected_count=total_tasks,
+                            worker_label=f"[gpu {gpu} tasks {task_numbers[0]}-{task_numbers[-1]}/{total_tasks}]",
+                            model=model,
+                            tokenizer=tokenizer,
+                        )
+                    except BaseException as exc:
+                        seconds = time.monotonic() - started
+                        if is_cuda_oom(exc) and len(tasks) > 1:
+                            traceback.print_exc()
+                            clear_cuda_cache()
+                            smaller_batch_size = max(1, len(tasks) // 2)
+                            current_batch_size = min(current_batch_size, smaller_batch_size)
+                            print(
+                                f"GPU worker {worker_index} OOM on batch {len(tasks)}; "
+                                f"retrying as batches of {smaller_batch_size}. "
+                                f"Future batch limit is now {current_batch_size}.",
+                                flush=True,
+                            )
+                            midpoint = len(tasks) // 2
+                            run_task_batch(tasks[:midpoint])
+                            run_task_batch(tasks[midpoint:])
+                            return
+
+                        traceback.print_exc()
+                        if is_cuda_oom(exc):
+                            clear_cuda_cache()
+                            current_batch_size = 1
+                        emit_results(
+                            tasks,
+                            ok=False,
+                            seconds=seconds,
+                            error=type(exc).__name__,
+                            effective_batch_size=len(tasks),
+                        )
+                    else:
+                        seconds = time.monotonic() - started
+                        emit_results(
+                            tasks,
+                            ok=True,
+                            seconds=seconds,
+                            correct=correct,
+                            effective_batch_size=len(tasks),
+                        )
 
                 while True:
                     first_task = task_queue.get()
@@ -173,7 +278,7 @@ def gpu_worker(
                         return
 
                     tasks = [first_task]
-                    while len(tasks) < batch_size:
+                    while len(tasks) < current_batch_size:
                         try:
                             task = task_queue.get_nowait()
                         except queue.Empty:
@@ -183,54 +288,7 @@ def gpu_worker(
                             break
                         tasks.append(task)
 
-                    task_numbers = [task[0] for task in tasks]
-                    total_tasks = tasks[0][1]
-                    rows = [task[2] for task in tasks]
-                    problem_ids = [row["Problem ID"] for row in rows]
-                    started = time.monotonic()
-                    print(
-                        f"GPU worker {worker_index} starting tasks "
-                        f"{task_numbers[0]}-{task_numbers[-1]}/{total_tasks}: {', '.join(problem_ids)}",
-                        flush=True,
-                    )
-                    try:
-                        correct = run_rows(
-                            args,
-                            rows,
-                            selected_count=total_tasks,
-                            worker_label=f"[gpu {gpu} tasks {task_numbers[0]}-{task_numbers[-1]}/{total_tasks}]",
-                            model=model,
-                            tokenizer=tokenizer,
-                        )
-                    except Exception:
-                        traceback.print_exc()
-                        seconds = time.monotonic() - started
-                        for task_number, problem_id in zip(task_numbers, problem_ids):
-                            result_queue.put(
-                                {
-                                    "ok": False,
-                                    "gpu": gpu,
-                                    "worker_index": worker_index,
-                                    "task_number": task_number,
-                                    "problem_id": problem_id,
-                                    "seconds": seconds,
-                                }
-                            )
-                    else:
-                        seconds = time.monotonic() - started
-                        for task_number, problem_id in zip(task_numbers, problem_ids):
-                            result_queue.put(
-                                {
-                                    "ok": True,
-                                    "gpu": gpu,
-                                    "worker_index": worker_index,
-                                    "task_number": task_number,
-                                    "problem_id": problem_id,
-                                    "correct": int(correct),
-                                    "seconds": seconds,
-                                    "batch_size": len(tasks),
-                                }
-                            )
+                    run_task_batch(tasks)
             except BaseException:
                 traceback.print_exc()
                 result_queue.put(
@@ -346,7 +404,9 @@ def main() -> None:
             print(
                 f"[{completed}/{total_tasks}] {status} gpu={result['gpu']} "
                 f"problem={result['problem_id']} time={result['seconds']:.1f}s "
-                f"rate={rate:.3f} problems/s",
+                f"batch={result.get('batch_size', '?')} "
+                f"rate={rate:.3f} problems/s"
+                f"{' error=' + result['error'] if 'error' in result else ''}",
                 flush=True,
             )
 
