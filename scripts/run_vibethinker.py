@@ -534,6 +534,134 @@ def infer_text(
         )
 
 
+def trim_generated_token_ids(token_ids: list[int], eos_token_id: int | None, pad_token_id: int | None) -> list[int]:
+    trimmed = list(token_ids)
+    if eos_token_id is not None and eos_token_id in trimmed:
+        trimmed = trimmed[: trimmed.index(eos_token_id) + 1]
+    elif pad_token_id is not None and pad_token_id in trimmed:
+        trimmed = trimmed[: trimmed.index(pad_token_id)]
+    return trimmed
+
+
+def infer_text_batch(
+    model,
+    tokenizer,
+    prompts: list[str],
+    max_new_tokens: int | None,
+    temperature: float,
+    top_p: float,
+    auto_max_new_tokens: bool,
+    progress: bool = True,
+    progress_desc: str = "Generating batch",
+    progress_interval: float = 2.0,
+) -> list[GenerationResult]:
+    if not prompts:
+        return []
+    if len(prompts) == 1:
+        return [
+            infer_text(
+                model=model,
+                tokenizer=tokenizer,
+                prompt=prompts[0],
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                stream=False,
+                stream_mode="token",
+                auto_max_new_tokens=auto_max_new_tokens,
+                progress=progress,
+                progress_desc=progress_desc,
+                progress_interval=progress_interval,
+            )
+        ]
+
+    texts = [
+        tokenizer.apply_chat_template(
+            [{"role": "user", "content": prompt}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        for prompt in prompts
+    ]
+    original_padding_side = tokenizer.padding_side
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
+    try:
+        inputs = tokenizer(texts, return_tensors="pt", padding=True).to(model.device)
+    finally:
+        tokenizer.padding_side = original_padding_side
+
+    attention_mask = inputs["attention_mask"]
+    prompt_token_ids = [
+        inputs["input_ids"][index][attention_mask[index].bool()].tolist()
+        for index in range(len(prompts))
+    ]
+    prompt_lengths = [len(ids) for ids in prompt_token_ids]
+    max_prompt_tokens = max(prompt_lengths)
+    context_window = get_context_window(model, tokenizer)
+    if max_new_tokens is None:
+        if auto_max_new_tokens:
+            if context_window is not None:
+                max_new_tokens = max(1, context_window - max_prompt_tokens)
+            else:
+                max_new_tokens = FALLBACK_AIME_MAX_NEW_TOKENS
+        else:
+            max_new_tokens = DEFAULT_MAX_NEW_TOKENS
+
+    generation_kwargs = dict(
+        max_new_tokens=max_new_tokens,
+        do_sample=temperature > 0,
+        top_k=None,
+        use_cache=True,
+        pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
+        eos_token_id=tokenizer.eos_token_id,
+    )
+    if temperature > 0:
+        generation_kwargs["temperature"] = temperature
+        generation_kwargs["top_p"] = top_p
+    generation_config = GenerationConfig(**generation_kwargs)
+    progress_bar = GenerationProgress(
+        prompt_tokens=inputs["input_ids"].shape[-1],
+        max_new_tokens=max_new_tokens,
+        enabled=progress,
+        desc=progress_desc,
+        update_interval=progress_interval,
+    )
+
+    with progress_bar:
+        with torch.inference_mode():
+            outputs = model.generate(
+                **inputs,
+                generation_config=generation_config,
+                stopping_criteria=StoppingCriteriaList([progress_bar]),
+            )
+
+    input_width = inputs["input_ids"].shape[-1]
+    results: list[GenerationResult] = []
+    for index, prompt_ids in enumerate(prompt_token_ids):
+        generated_ids = trim_generated_token_ids(
+            outputs[index][input_width:].tolist(),
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id,
+        )
+        sequence_token_ids = prompt_ids + generated_ids
+        results.append(
+            GenerationResult(
+                text=tokenizer.decode(generated_ids, skip_special_tokens=True).strip(),
+                prompt_tokens=len(prompt_ids),
+                context_window=context_window,
+                max_new_tokens=max_new_tokens,
+                generated_tokens=len(generated_ids),
+                hit_token_limit=len(generated_ids) >= max_new_tokens,
+                generated_token_ids=generated_ids,
+                sequence_token_ids=sequence_token_ids,
+                activation_capture=None,
+            )
+        )
+    return results
+
+
 def capture_sequence_activations(
     model,
     sequence_ids: torch.Tensor,
