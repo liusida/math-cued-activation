@@ -48,7 +48,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=1,
         help="Number of problems to generate in one batched call. Default keeps legacy one-at-a-time behavior.",
     )
-    parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-p", type=float, default=0.95)
     parser.add_argument("--device-map", default="auto")
     parser.add_argument("--dtype", choices=["auto", "bfloat16", "float16", "float32"], default="auto")
