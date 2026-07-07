@@ -26,6 +26,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--shuffle", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--shard-count",
+        type=int,
+        default=1,
+        help="Split the selected rows into this many process-level shards.",
+    )
+    parser.add_argument(
+        "--shard-index",
+        type=int,
+        default=0,
+        help="0-based shard index to run. Use with --shard-count.",
+    )
     parser.add_argument("--problem-id", action="append")
     parser.add_argument("--answer-only", action="store_true")
     parser.add_argument("--max-new-tokens", type=int, default=None)
@@ -46,6 +58,16 @@ def should_stream(args: argparse.Namespace) -> bool:
     return not args.no_stream and (args.stream_with_progress or not args.progress)
 
 
+def shard_rows(rows: list[dict], shard_count: int, shard_index: int) -> list[dict]:
+    if shard_count < 1:
+        raise SystemExit("--shard-count must be at least 1.")
+    if not 0 <= shard_index < shard_count:
+        raise SystemExit("--shard-index must satisfy 0 <= shard-index < shard-count.")
+    if shard_count == 1:
+        return rows
+    return [row for index, row in enumerate(rows) if index % shard_count == shard_index]
+
+
 def main() -> None:
     args = parse_args()
     rows = load_imo_answerbench_rows(
@@ -57,10 +79,24 @@ def main() -> None:
     )
     if not rows:
         raise SystemExit("No IMO-AnswerBench rows matched the request.")
+    selected_count = len(rows)
+    rows = shard_rows(rows, args.shard_count, args.shard_index)
+    if not rows:
+        raise SystemExit(
+            f"Shard {args.shard_index}/{args.shard_count} has no rows "
+            f"from the {selected_count} selected row(s)."
+        )
 
     model_id = resolve_model_id(args.model)
     model, tokenizer = load_model_and_tokenizer(args)
     correct = 0
+
+    if args.shard_count > 1:
+        print(
+            f"Running shard {args.shard_index}/{args.shard_count}: "
+            f"{len(rows)} of {selected_count} selected row(s).",
+            flush=True,
+        )
 
     for row_number, row in enumerate(rows, start=1):
         dataset_index = row.get("_dataset_index")
