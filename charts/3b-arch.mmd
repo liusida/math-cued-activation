@@ -1,0 +1,64 @@
+flowchart TB
+    %% VibeThinker-3B / Qwen2ForCausalLM architecture essence.
+
+    prompt["Chat prompt<br/>Qwen2 chat template"]
+    tok["Qwen2 tokenizer<br/>vocab: 151,936"]
+    emb["Token embedding<br/>151,936 x 2,048"]
+    blocks["36x Qwen2 decoder blocks<br/>hidden size: 2,048"]
+    norm["Final RMSNorm<br/>eps: 1e-6"]
+    head["LM head<br/>tied with embedding"]
+    logits["Next-token logits"]
+
+    prompt --> tok --> emb --> blocks --> norm --> head --> logits
+
+    subgraph spec["Model Scale"]
+        params["~3.086B parameters"]
+        ctx["Context window: 131,072 tokens"]
+        dtype["Config dtype: bfloat16"]
+        ropeSpec["RoPE theta: 1,000,000"]
+    end
+
+    spec -.-> blocks
+
+    subgraph block["One Decoder Block, repeated 36x"]
+        direction TB
+
+        x["Residual stream<br/>2,048 dims"]
+
+        attnNorm["RMSNorm"]
+        qkv["Q/K/V projections"]
+        rope["RoPE position encoding"]
+        gqa["Grouped-query causal attention<br/>16 Q heads, 2 KV heads<br/>head dim: 128"]
+        outProj["Attention output projection<br/>2,048 -> 2,048"]
+        addAttn["Residual add"]
+
+        mlpNorm["RMSNorm"]
+        gate["gate_proj + SiLU<br/>2,048 -> 11,008"]
+        up["up_proj<br/>2,048 -> 11,008"]
+        swiglu["SwiGLU multiply"]
+        down["down_proj<br/>11,008 -> 2,048"]
+        addMlp["Residual add"]
+
+        x --> attnNorm --> qkv --> rope --> gqa --> outProj --> addAttn
+        x -. skip .-> addAttn
+        addAttn --> mlpNorm
+        mlpNorm --> gate --> swiglu
+        mlpNorm --> up --> swiglu
+        swiglu --> down --> addMlp
+        addAttn -. skip .-> addMlp
+        addMlp --> y["Next residual stream"]
+    end
+
+    blocks -.-> block
+
+    %% classDef io fill:#e8f4ff,stroke:#3178c6,color:#102a43
+    %% classDef core fill:#fff4d6,stroke:#c89100,color:#332600
+    %% classDef attn fill:#efe8ff,stroke:#7b61ff,color:#1f174d
+    %% classDef mlp fill:#e9f8ef,stroke:#2f9e44,color:#12351f
+    %% classDef meta fill:#f5f5f5,stroke:#777,color:#222
+
+    %% class prompt,tok,logits io
+    %% class emb,blocks,norm,head,block core
+    %% class attnNorm,qkv,rope,gqa,outProj,addAttn attn
+    %% class mlpNorm,gate,up,swiglu,down,addMlp mlp
+    %% class params,ctx,dtype,ropeSpec,spec meta

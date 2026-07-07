@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments and local env
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Codex / local agent metadata
+.agents/
+.codex/
+
+# Local caches
+.cache/
+.huggingface/
+hf_cache/
+
+# Generated outputs
+activations/
+outputs/
+results/
+logs/
+*.log
+
+# Large model / tensor artifacts
+*.pt
+*.pth
+*.safetensors
+*.bin
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

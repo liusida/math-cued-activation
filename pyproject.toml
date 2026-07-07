@@ -1,0 +1,14 @@
+[project]
+name = "try-vibethinker-3b"
+version = "0.1.0"
+description = "Small local inference script for WeiboAI/VibeThinker-3B"
+requires-python = ">=3.10"
+dependencies = [
+    "accelerate",
+    "datasets",
+    "torch",
+    "transformers>=4.54.0",
+]
+
+[tool.uv]
+package = false
