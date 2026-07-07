@@ -24,7 +24,6 @@ hf_cache/
 
 # Generated outputs
 activations/
-outputs/
 results/
 logs/
 *.log
