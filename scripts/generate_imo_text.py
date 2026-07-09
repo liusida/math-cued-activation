@@ -50,7 +50,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-p", type=float, default=0.95)
-    parser.add_argument("--device-map", default="auto")
+    parser.add_argument("--device", default="cuda", help='Device placement. Use "cuda", "cuda:N", or "cpu".')
     parser.add_argument("--dtype", choices=["auto", "bfloat16", "float16", "float32"], default="auto")
     parser.add_argument("--generated-text-dir", type=Path, default=Path("outputs/imo-answerbench-text"))
     parser.add_argument("--no-stream", action="store_true")

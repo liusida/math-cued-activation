@@ -8,9 +8,10 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
-from threading import Thread
+from threading import Event, Thread
 import time
 
+from gb10_load_llm import load_model_to_cuda
 import torch
 from transformers import (
     AutoModelForCausalLM,
@@ -136,11 +137,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="For benchmark modes, ask for only the final answer. Much faster, less reliable.",
     )
-    parser.add_argument(
-        "--device-map",
-        default="auto",
-        help='Device placement for transformers, e.g. "auto", "cuda", or "cpu".',
-    )
+    parser.add_argument("--device", default="cuda", help='Device placement. Use "cuda", "cuda:N", or "cpu".')
     parser.add_argument(
         "--dtype",
         choices=["auto", "bfloat16", "float16", "float32"],
@@ -375,16 +372,74 @@ class GenerationProgress(StoppingCriteria):
             self._displayed_generated_tokens = self._latest_generated_tokens
 
 
+class BusyProgress:
+    def __init__(self, desc: str, enabled: bool = True, update_interval: float = 1.0) -> None:
+        self.desc = desc
+        self.enabled = enabled
+        self.update_interval = max(0.1, update_interval)
+        self._stop = Event()
+        self._thread: Thread | None = None
+        self._bar = None
+
+    def __enter__(self) -> "BusyProgress":
+        if not self.enabled:
+            return self
+        try:
+            from tqdm.auto import tqdm
+        except Exception:
+            print(f"{self.desc} ...", flush=True)
+            return self
+
+        self._bar = tqdm(
+            total=None,
+            desc=self.desc,
+            unit="s",
+            dynamic_ncols=True,
+            leave=True,
+            mininterval=self.update_interval,
+        )
+        self._thread = Thread(target=self._tick, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=self.update_interval + 0.5)
+            self._thread = None
+        if self._bar is not None:
+            self._bar.close()
+            self._bar = None
+
+    def _tick(self) -> None:
+        while not self._stop.wait(self.update_interval):
+            if self._bar is not None:
+                self._bar.update(self.update_interval)
+
+
 def load_model_and_tokenizer(args: argparse.Namespace):
     model_id = resolve_model_id(args.model)
+    device = args.device
     print(f"Loading model: {model_id}", flush=True)
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        dtype=choose_dtype(args.dtype),
-        device_map=args.device_map,
-        low_cpu_mem_usage=True,
-    )
+    model_kwargs = {
+        "dtype": choose_dtype(args.dtype),
+        "low_cpu_mem_usage": True,
+    }
+    if device == "cpu":
+        model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+    elif isinstance(device, str) and device.startswith("cuda"):
+        model = load_model_to_cuda(
+            AutoModelForCausalLM,
+            model_id,
+            device=device,
+            **model_kwargs,
+        )
+    else:
+        raise ValueError(
+            f"Unsupported --device {device!r}. Use 'cuda', 'cuda:N', or 'cpu'; "
+            "GB10 loading supports only direct CPU or CUDA placement."
+        )
     return model, tokenizer
 
 
@@ -669,6 +724,8 @@ def capture_sequence_activations(
     layer: int | None,
     activation_dtype: str,
     capture_prompt_activations: bool,
+    progress: bool = True,
+    progress_desc: str | None = None,
 ) -> ActivationCaptureResult | None:
     if layer is None:
         return None
@@ -681,13 +738,15 @@ def capture_sequence_activations(
         save_dtype=activation_save_dtype(activation_dtype),
         capture_prompt=capture_prompt_activations,
     )
+    desc = progress_desc or f"Activation forward layer {layer} ({input_ids.shape[-1]} tok)"
     with capture:
-        with torch.inference_mode():
-            model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                use_cache=False,
-            )
+        with BusyProgress(desc=desc, enabled=progress):
+            with torch.inference_mode():
+                model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    use_cache=False,
+                )
     return capture.result()
 
 
@@ -886,12 +945,18 @@ def save_imo_generation_bundle(
     model_id: str,
     prompt: str,
     result: GenerationResult,
+    flat: bool = False,
 ) -> Path:
-    output_dir = generated_text_output_dir(
-        root=output_dir,
-        dataset_id=IMO_ANSWERBENCH_ID,
-        model_id=model_id,
-    )
+    if flat:
+        output_dir = output_dir.expanduser()
+        storage_root = output_dir.parent
+    else:
+        output_dir = generated_text_output_dir(
+            root=output_dir,
+            dataset_id=IMO_ANSWERBENCH_ID,
+            model_id=model_id,
+        )
+        storage_root = output_dir.parents[1]
     output_dir.mkdir(parents=True, exist_ok=True)
     problem_id = safe_filename(str(row["Problem ID"]))
     text_path = output_dir / f"{problem_id}.txt"
@@ -904,9 +969,9 @@ def save_imo_generation_bundle(
         result=result,
     )
     metadata["storage"] = {
-        "root": str(output_dir.parents[1]),
-        "text_relative_path": str(text_path.relative_to(output_dir.parents[1])),
-        "json_relative_path": str(json_path.relative_to(output_dir.parents[1])),
+        "root": str(storage_root),
+        "text_relative_path": str(text_path.relative_to(storage_root)),
+        "json_relative_path": str(json_path.relative_to(storage_root)),
     }
     json_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n")
     text_path.write_text(format_imo_generation_text(metadata))
@@ -914,12 +979,17 @@ def save_imo_generation_bundle(
 
 
 def load_imo_generation_bundle(root: Path, row: dict, model_id: str) -> tuple[dict, Path]:
+    root = root.expanduser()
+    problem_id = safe_filename(str(row["Problem ID"]))
+    flat_json_path = root / f"{problem_id}.json"
+    if flat_json_path.exists():
+        return json.loads(flat_json_path.read_text()), flat_json_path
+
     output_dir = generated_text_output_dir(
         root=root,
         dataset_id=IMO_ANSWERBENCH_ID,
         model_id=model_id,
     )
-    problem_id = safe_filename(str(row["Problem ID"]))
     json_path = output_dir / f"{problem_id}.json"
     if not json_path.exists():
         raise FileNotFoundError(
@@ -992,10 +1062,59 @@ def save_imo_activation_bundle(
         captured_token_ids = result.sequence_token_ids[: capture.captured_tokens]
     else:
         captured_token_ids = generated_token_ids[: capture.captured_tokens]
+    prompt_token_ids = result.sequence_token_ids[: capture.prompt_tokens]
+    if capture.capture_prompt:
+        prompt_activations = capture.activations[: capture.prompt_tokens]
+        generated_start = capture.prompt_tokens
+        generated_stop = min(generated_start + result.generated_tokens, capture.activations.shape[0])
+        generated_activations = capture.activations[generated_start:generated_stop]
+        prompt_captured_tokens = int(prompt_activations.shape[0])
+        generated_captured_tokens = int(generated_activations.shape[0])
+        capture_segments = {
+            "prompt": {
+                "token_start": 0,
+                "token_end": prompt_captured_tokens,
+                "captured_tokens": prompt_captured_tokens,
+                "activation_key": "prompt_activations",
+                "token_ids_key": "prompt_token_ids",
+                "notes": "Prompt segment includes chat-template/system/user/generation-prompt tokens.",
+            },
+            "generated": {
+                "token_start": generated_start,
+                "token_end": generated_start + generated_captured_tokens,
+                "captured_tokens": generated_captured_tokens,
+                "activation_key": "generated_activations",
+                "token_ids_key": "generated_token_ids",
+                "notes": (
+                    "Generated-token rows were captured from a full-sequence forward pass "
+                    "over prompt/chat-template plus generated tokens, so prompt context is present."
+                ),
+            },
+        }
+    else:
+        prompt_activations = torch.empty((0, capture.activations.shape[-1]), dtype=capture.activations.dtype)
+        generated_activations = capture.activations
+        prompt_captured_tokens = 0
+        generated_captured_tokens = capture.captured_tokens
+        capture_segments = {
+            "generated": {
+                "token_start": capture.prompt_tokens,
+                "token_end": capture.prompt_tokens + generated_captured_tokens,
+                "captured_tokens": generated_captured_tokens,
+                "activation_key": "generated_activations",
+                "token_ids_key": "generated_token_ids",
+                "notes": (
+                    "Generated-token rows were captured from a full-sequence forward pass "
+                    "over prompt/chat-template plus generated tokens, so prompt context is present."
+                ),
+            }
+        }
 
     metadata = {
         "activation_name": f"model.layers.{capture.layer}",
         "activation_shape": tuple(capture.activations.shape),
+        "prompt_activation_shape": tuple(prompt_activations.shape),
+        "generated_activation_shape": tuple(generated_activations.shape),
         "capture": {
             "layer": capture.layer,
             "layer_indexing": "0-based Hugging Face decoder layer index",
@@ -1003,16 +1122,20 @@ def save_imo_activation_bundle(
             "prompt_tokens": capture.prompt_tokens,
             "generated_tokens": result.generated_tokens,
             "captured_tokens": capture.captured_tokens,
+            "prompt_captured_tokens": prompt_captured_tokens,
+            "generated_captured_tokens": generated_captured_tokens,
             "activation_dtype": capture.dtype,
             "capture_strategy": "post_generation_full_forward",
             "alignment": (
-                "Rows align to captured_token_ids. By default these are generated-token "
-                "activations only; with --capture-prompt-activations they include prompt "
-                "tokens followed by generated tokens."
+                "Rows in activations align to captured_token_ids. prompt_activations align "
+                "to prompt_token_ids, and generated_activations align to generated_token_ids. "
+                "Generated activations are computed in the full prompt/chat-template context."
             ),
+            "segments": capture_segments,
         },
         "tokens": {
             "sequence_token_ids": result.sequence_token_ids,
+            "prompt_token_ids": prompt_token_ids,
             "generated_token_ids": generated_token_ids,
             "captured_token_ids": captured_token_ids,
         },
@@ -1043,7 +1166,15 @@ def save_imo_activation_bundle(
         },
     }
 
-    torch.save({"activations": capture.activations, **metadata}, path)
+    torch.save(
+        {
+            "activations": capture.activations,
+            "prompt_activations": prompt_activations,
+            "generated_activations": generated_activations,
+            **metadata,
+        },
+        path,
+    )
     if write_sidecars:
         metadata["storage"]["text_relative_path"] = str(text_path.relative_to(output_dir.parents[2]))
         metadata["storage"]["json_relative_path"] = str(json_path.relative_to(output_dir.parents[2]))
@@ -1089,6 +1220,8 @@ def format_imo_text_sidecar(metadata: dict) -> str:
         f"Source: {problem['source']}\n"
         f"Model: {generation['model']}\n"
         f"Activation: {metadata['activation_name']} shape={metadata['activation_shape']}\n"
+        f"Prompt activations: shape={metadata.get('prompt_activation_shape', 'unknown')}\n"
+        f"Generated activations: shape={metadata.get('generated_activation_shape', 'unknown')}\n"
         f"Generated tokens: {capture['generated_tokens']}\n"
         f"Captured tokens: {capture['captured_tokens']}\n"
         f"Gold short answer: {problem['short_answer']}\n"

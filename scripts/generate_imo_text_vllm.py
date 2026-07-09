@@ -17,11 +17,9 @@ from tqdm.auto import tqdm
 from run_vibethinker import (
     DEFAULT_MODEL,
     GenerationResult,
-    IMO_ANSWERBENCH_ID,
     build_imo_answerbench_prompt,
     extract_final_answer_text,
     load_imo_answerbench_rows,
-    model_slug,
     normalize_short_answer,
     safe_filename,
     save_imo_generation_bundle,
@@ -70,7 +68,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--request-timeout", type=float, default=7200.0)
     parser.add_argument("--retries", type=int, default=3)
     parser.add_argument("--retry-sleep", type=float, default=5.0)
-    parser.add_argument("--generated-text-dir", type=Path, default=Path("outputs/imo-answerbench-text-vllm"))
+    parser.add_argument(
+        "--generated-text-dir",
+        type=Path,
+        default=Path("outputs/imo-answerbench-responses/WeiboAI__VibeThinker-3B"),
+    )
     parser.add_argument("--rerun-existing", action="store_true")
     parser.add_argument(
         "--tokenizer-model",
@@ -93,21 +95,8 @@ def read_api_key(path: Path) -> str:
     return key or "local-vllm"
 
 
-def vllm_model_id(server_name: str, model_id: str) -> str:
-    return f"vLLM/{server_name}/{model_id}"
-
-
-def vllm_model_slug(server_name: str, model_id: str) -> str:
-    return model_slug(vllm_model_id(server_name, model_id))
-
-
-def output_json_path(output_root: Path, server_name: str, model_id: str, problem_id: str) -> Path:
-    output_dir = (
-        output_root.expanduser()
-        / safe_filename(IMO_ANSWERBENCH_ID.replace("/", "__"))
-        / vllm_model_slug(server_name, model_id)
-    )
-    return output_dir / f"{safe_filename(problem_id)}.json"
+def output_json_path(output_root: Path, problem_id: str) -> Path:
+    return output_root.expanduser() / f"{safe_filename(problem_id)}.json"
 
 
 def request_chat_completion(
@@ -238,9 +227,10 @@ def generate_one(args: argparse.Namespace, api_key: str, tokenizer, row: dict, r
         output_dir=args.generated_text_dir,
         row=row,
         row_number=(dataset_index + 1 if isinstance(dataset_index, int) else row_number),
-        model_id=vllm_model_id(args.server_name, args.model),
+        model_id=args.model,
         prompt=prompt,
         result=result,
+        flat=True,
     )
 
     prediction = extract_final_answer_text(result.text)
@@ -274,8 +264,6 @@ def main() -> None:
             for row in rows
             if not output_json_path(
                 args.generated_text_dir,
-                args.server_name,
-                args.model,
                 str(row["Problem ID"]),
             ).exists()
         ]

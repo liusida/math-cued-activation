@@ -1,0 +1,39 @@
+You are reviewing a small research prototype that studies how language models reason about a mixed mathematical and programming task. Please read the problem carefully and produce a clear solution. Do not skip steps. If you introduce notation, define it before using it. If you write code, explain why the code matches the mathematical argument.
+
+Problem.
+
+Let n be a positive integer. For every ordered pair of integers (a, b) with 1 <= a <= n and 1 <= b <= n, define r(a, b) to be the remainder when a b is divided by n + 1. Let
+
+    S(n) = sum_{a=1}^{n} sum_{b=1}^{n} r(a, b).
+
+We want to understand the structure of S(n), not merely compute it by brute force for a few values. The task has three parts.
+
+1. Give a mathematical derivation for S(n) in terms of n and elementary number-theoretic quantities. It is fine if the final expression contains a sum over divisors, but the derivation should make clear why the expression is correct.
+
+2. Use your expression to determine all positive integers n for which
+
+    S(n) = (n^3 - n^2 + 2) / 4.
+
+3. Write a short Python function that verifies your answer for all n <= 200 by direct computation, and explain what the verification does.
+
+Hints and expectations.
+
+It may be useful to replace m = n + 1, so that the pairs range over 1, 2, ..., m - 1 while the modulus is m. For a fixed a, the residues a, 2a, 3a, ..., (m - 1)a modulo m have a repeated pattern controlled by gcd(a, m). If d = gcd(a, m), then a/d is invertible modulo m/d. This means that the nonzero residues modulo m/d appear in a permuted way before being multiplied back by d. Try to compute the sum over b for one fixed a, then sum over all possible values of gcd(a, m).
+
+When you move from fixed a to all a, be careful about how many integers a in {1, ..., m - 1} have gcd(a, m) equal to d. This count should involve Euler's phi function. Also be careful about the fact that the remainder is always in {0, 1, ..., m - 1}, so multiples of the modulus contribute zero remainder rather than m.
+
+Please keep the response organized. First explain the fixed-a residue pattern. Then derive the divisor-sum expression. Then solve the target equation. Then give the Python verification. The final answer should make it easy for a reader to see both the mathematical reason and the computational check.
+
+As a style constraint, avoid hand-wavy phrases like "it is obvious" or "clearly" unless the statement has just been justified. Prefer compact but complete reasoning. For the Python function, use readable variable names and avoid relying on external packages.
+
+Additional context for the reviewer.
+
+The goal of this prompt is not only to obtain the final integer answers. It is also to observe how the model carries a long chain of reasoning through a precise symbolic task. A good answer should maintain the connection between the modular arithmetic, the divisor counting, and the final equation. If there is a special case such as m = 2 or n = 1, handle it explicitly instead of allowing a formula with hidden assumptions to obscure it.
+
+For example, if you claim that the residues for fixed a have total d times the sum of residues modulo m/d, show where the repeated zero terms enter. If you change variables from d = gcd(a, m) to q = m/d, state the new range and the corresponding count. If you use the identity that the sum of positive integers less than q and coprime to q is q phi(q) / 2 for q > 1, either justify it briefly by pairing x with q - x or mention the exceptional case separately.
+
+When solving the equation, do not simply list values from the verification program. Use the derived expression to narrow the possibilities. If the final step requires bounding a divisor sum, explain the bound and why equality can or cannot occur. If a short exhaustive check remains after a mathematical reduction, describe exactly what has been reduced and what is still being checked.
+
+For the Python verification, the function may compute remainders directly in O(n^2) time for each n, since n <= 200 is small. It should compare the integer value 4*S(n) with n^3 - n^2 + 2 to avoid floating point arithmetic. The output should be a list of n values that satisfy the equation. Include a short comment in the code explaining why multiplying by 4 is used.
+
+Please write the answer as if it will be read by someone who knows elementary number theory but has not seen this problem before. Keep the exposition steady: define, derive, solve, verify.

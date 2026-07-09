@@ -4,8 +4,11 @@ version = "0.1.0"
 description = "Small local inference script for WeiboAI/VibeThinker-3B"
 requires-python = ">=3.10"
 dependencies = [
-    "accelerate",
     "datasets",
+    "gb10-load-llm",
+    "matplotlib",
+    "networkx",
+    "scipy",
     "torch",
     "transformers>=4.54.0",
 ]

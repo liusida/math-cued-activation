@@ -351,7 +351,7 @@ def cache_key(model_id: Any, kwargs: dict[str, Any]) -> tuple[str, str]:
     stable = {
         key: str(value)
         for key, value in kwargs.items()
-        if key in {"dtype", "torch_dtype", "device_map", "local_files_only", "trust_remote_code", "revision"}
+        if key in {"dtype", "torch_dtype", "local_files_only", "trust_remote_code", "revision"}
     }
     return str(model_id), json.dumps(stable, sort_keys=True)
 

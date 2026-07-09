@@ -89,6 +89,8 @@ def format_text_sidecar(metadata: dict) -> str:
         f"Model: {generation.get('model', 'unknown')}\n"
         f"Activation: {metadata.get('activation_name', 'unknown')} "
         f"shape={metadata.get('activation_shape', 'unknown')}\n"
+        f"Prompt activations: shape={metadata.get('prompt_activation_shape', 'unknown')}\n"
+        f"Generated activations: shape={metadata.get('generated_activation_shape', 'unknown')}\n"
         f"Generated tokens: {capture.get('generated_tokens', 'unknown')}\n"
         f"Captured tokens: {capture.get('captured_tokens', 'unknown')}\n"
         f"Gold short answer: {problem.get('short_answer', 'unknown')}\n"

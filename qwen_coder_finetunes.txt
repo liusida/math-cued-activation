@@ -1,0 +1,8 @@
+Fasoo Spring=fasoo/Qwen2.5-Coder-3B-Spring
+Security Qwen=whywhywhywhy/security-qwen2.5-3b-coder-instruct
+VeriReason RTL=Nellyw888/VeriReason-Qwen2.5-3b-RTLCoder-Verilog-GRPO-reasoning-tb
+Schema Aware=ShacharNar/qwen2.5_coder_3b_probgate_schema_aware_finetuned_only_answerable
+Git Commit=CyrusCheungkf/git-commit-3B
+Qwen Coder Base=Qwen/Qwen2.5-Coder-3B
+Qwen Coder Instruct=Qwen/Qwen2.5-Coder-3B-Instruct
+VibeThinker=WeiboAI/VibeThinker-3B

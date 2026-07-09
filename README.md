@@ -87,7 +87,7 @@ uv run python scripts/generate_imo_text_vllm.py \
   --sample-size 4 \
   --start-index 0 \
   --concurrency 4 \
-  --generated-text-dir outputs/imo-answerbench-text-vllm
+  --generated-text-dir outputs/imo-answerbench-responses/WeiboAI__VibeThinker-3B
 ```
 
 For a two-server throughput test, split the dataset:
@@ -100,7 +100,7 @@ uv run python scripts/generate_imo_text_vllm.py \
   --sample-size 200 \
   --start-index 0 \
   --concurrency 6 \
-  --generated-text-dir outputs/imo-answerbench-text-vllm
+  --generated-text-dir outputs/imo-answerbench-responses/WeiboAI__VibeThinker-3B
 
 uv run python scripts/generate_imo_text_vllm.py \
   --api-url http://127.0.0.1:8001/v1/chat/completions \
@@ -109,5 +109,49 @@ uv run python scripts/generate_imo_text_vllm.py \
   --sample-size 200 \
   --start-index 200 \
   --concurrency 6 \
-  --generated-text-dir outputs/imo-answerbench-text-vllm
+  --generated-text-dir outputs/imo-answerbench-responses/WeiboAI__VibeThinker-3B
 ```
+
+## Activation Capture
+
+Stop any vLLM servers before activation capture so the Hugging Face replay has
+clean GPU memory. Captures replay the saved full token sequence and save layer
+32 activations for both prompt/chat-template tokens and generated tokens:
+
+```bash
+uv run python scripts/capture_imo_activations.py \
+  --sample-size 400
+```
+
+Each saved `.pt` bundle contains:
+
+- `activations`: full captured sequence, prompt followed by generated tokens.
+- `prompt_activations`: prompt plus chat-template/generation-prompt tokens.
+- `generated_activations`: generated-token activations, computed with the full
+  prompt/chat-template context present.
+
+Run a one-example sanity check before a full capture:
+
+```bash
+uv run python scripts/capture_imo_activations.py \
+  --sample-size 1 \
+  --sanity-check-next-token \
+  --sanity-check-max-positions 0
+```
+
+The next-token sanity check replays the final decoder layer once, applies the
+model final norm and `lm_head`, and compares top-1 predictions against the saved
+generated token sequence. This is an alignment diagnostic, not a requirement
+that every saved token be top-1 under Hugging Face replay. The saved responses
+were generated through vLLM and replayed through Hugging Face Transformers, so
+small backend/kernel/precision differences can flip a few argmax decisions.
+
+Observed sanity result for `imo-bench-algebra-001` with the full generated
+continuation:
+
+```text
+checked=10050, same=9986, different=64, top1_match=99.36%
+```
+
+Treat roughly 99%+ top-1 agreement as a healthy replay/alignment check; do not
+expect 100% agreement.
