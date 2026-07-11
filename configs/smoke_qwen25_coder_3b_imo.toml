@@ -1,0 +1,86 @@
+# End-to-end smoke test for a second 3B model. All artifacts are isolated.
+version = 1
+
+[model]
+id = "Qwen/Qwen2.5-Coder-3B-Instruct"
+tokenizer = "Qwen/Qwen2.5-Coder-3B-Instruct"
+revision = "main"
+hidden_size = 2048
+layer_count = 36
+dtype = "auto"
+
+[dataset]
+id = "OpenEvals/IMO-AnswerBench"
+split = "train"
+revision = "main"
+id_field = "id"
+prompt_field = "problem"
+answer_field = "answer"
+sample_size = 5
+start_index = 0
+
+[prompt]
+answer_only = false
+
+[vllm]
+api_url = "http://127.0.0.1:8003/v1/chat/completions"
+api_key_file = "api_tokens/.vllm"
+server_name = "smoke-qwen25-coder"
+temperature = 0.0
+top_p = 0.95
+max_tokens = 0
+concurrency = 4
+request_timeout = 7200.0
+retries = 3
+retry_sleep = 5.0
+host = "127.0.0.1"
+port = 8003
+dtype = "bfloat16"
+max_model_len = 32768
+gpu_memory_utilization = 0.75
+cuda_visible_devices = "0"
+disable_flashinfer_sampler = true
+startup_timeout = 600.0
+shutdown_timeout = 30.0
+pid_file = "outputs/smoke/qwen25-coder-3b-imo/vllm.pid"
+log_file = "outputs/smoke/qwen25-coder-3b-imo/vllm.log"
+enforce_eager = true
+
+[storage]
+responses = "outputs/smoke/qwen25-coder-3b-imo/responses"
+activations = "outputs/smoke/qwen25-coder-3b-imo/activations"
+ica = "outputs/smoke/qwen25-coder-3b-imo/ica"
+explorer = "outputs/smoke/qwen25-coder-3b-imo/explorer/runs"
+database = "outputs/smoke/qwen25-coder-3b-imo/explorer/feature_index.sqlite"
+
+[capture]
+layers = [19]
+site = "residual-post"
+activation_dtype = "float16"
+capture_prompt_activations = true
+sanity_check_next_token = false
+
+[ica]
+max_rows = 50000
+seed = 0
+max_iter = 10
+tolerance = 0.0001
+nonlinearity = "logcosh"
+whitening_solver = "eigh"
+device = "cuda"
+
+[enrichment]
+max_rows = 50000
+seed = 0
+examples = 3
+context_window = 32
+chunk_size = 4096
+write_workers = 4
+device = "cuda"
+dtype = "float32"
+
+[explorer]
+run_id = "smoke_qwen25_coder_3b_imo_layer19"
+display_name = "Qwen2.5-Coder-3B-Instruct Smoke"
+host = "127.0.0.1"
+port = 8004

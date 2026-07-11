@@ -68,3 +68,7 @@ pipeline.
 See [`PIPELINE.md`](PIPELINE.md) for stage invariants and artifact details.
 See [`explorer/README.md`](explorer/README.md) for the boundary between tracked
 Explorer source and ignored runtime artifacts.
+
+Generation is implemented as an importable backend under
+`src/math_cued_activation/generation/`. Capture and ICA still retain private
+format-compatibility implementations while they are migrated incrementally.

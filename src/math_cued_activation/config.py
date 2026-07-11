@@ -60,6 +60,7 @@ class VllmConfig:
     shutdown_timeout: float
     pid_file: Path
     log_file: Path
+    enforce_eager: bool = False
 
 
 @dataclass(frozen=True)

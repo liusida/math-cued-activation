@@ -14,7 +14,10 @@ import urllib.request
 
 from tqdm.auto import tqdm
 
-from run_vibethinker import (
+from types import SimpleNamespace
+
+from ..config import PipelineConfig
+from .._compat_scripts.run_vibethinker import (
     DEFAULT_MODEL,
     GenerationResult,
     build_imo_answerbench_prompt,
@@ -239,8 +242,36 @@ def generate_one(args: argparse.Namespace, api_key: str, tokenizer, row: dict, r
     return str(row["Problem ID"]), text_path, is_correct
 
 
-def main() -> None:
-    args = parse_args()
+def generate_from_config(config: PipelineConfig, *, force: bool = False) -> None:
+    """Generate the configured response set while preserving bundle format."""
+    args = SimpleNamespace(
+        model=config.model.id,
+        api_url=config.vllm.api_url,
+        api_key_file=config.vllm.api_key_file,
+        server_name=config.vllm.server_name,
+        sample_size=config.dataset.sample_size,
+        start_index=config.dataset.start_index,
+        shuffle=False,
+        seed=config.ica.seed,
+        problem_id=None,
+        answer_only=config.prompt.answer_only,
+        max_new_tokens=config.vllm.max_tokens or None,
+        temperature=config.vllm.temperature,
+        top_p=config.vllm.top_p,
+        context_window=config.vllm.max_model_len,
+        concurrency=config.vllm.concurrency,
+        request_timeout=config.vllm.request_timeout,
+        retries=config.vllm.retries,
+        retry_sleep=config.vllm.retry_sleep,
+        generated_text_dir=config.storage.responses,
+        rerun_existing=force,
+        tokenizer_model=config.model.tokenizer,
+        no_token_ids=False,
+    )
+    run_generation(args)
+
+
+def run_generation(args: argparse.Namespace | SimpleNamespace) -> None:
     if args.concurrency < 1:
         raise SystemExit("--concurrency must be at least 1.")
     if args.context_window < 1:
@@ -306,6 +337,10 @@ def main() -> None:
         for problem_id, exc in failures[:20]:
             print(f"- {problem_id}: {exc}")
         raise SystemExit(1)
+
+
+def main() -> None:
+    run_generation(parse_args())
 
 
 if __name__ == "__main__":

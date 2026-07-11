@@ -53,6 +53,8 @@ def start_vllm(config: PipelineConfig) -> None:
         "--max-model-len", str(cfg.max_model_len),
         "--gpu-memory-utilization", str(cfg.gpu_memory_utilization),
     ]
+    if cfg.enforce_eager:
+        command.append("--enforce-eager")
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = cfg.cuda_visible_devices
     if cfg.disable_flashinfer_sampler:

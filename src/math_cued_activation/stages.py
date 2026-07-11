@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .compat import run_script
 from .config import PipelineConfig, dataset_slug, model_slug
+from .generation import generate_from_config
 
 
 def _flag(condition: bool, value: str) -> list[str]:
@@ -11,27 +12,7 @@ def _flag(condition: bool, value: str) -> list[str]:
 
 
 def generate(config: PipelineConfig, *, force: bool = False) -> None:
-    args = [
-        "--api-url", config.vllm.api_url,
-        "--api-key-file", str(config.vllm.api_key_file),
-        "--model", config.model.id,
-        "--tokenizer-model", config.model.tokenizer,
-        "--server-name", config.vllm.server_name,
-        "--sample-size", str(config.dataset.sample_size),
-        "--start-index", str(config.dataset.start_index),
-        "--temperature", str(config.vllm.temperature),
-        "--top-p", str(config.vllm.top_p),
-        "--concurrency", str(config.vllm.concurrency),
-        "--request-timeout", str(config.vllm.request_timeout),
-        "--retries", str(config.vllm.retries),
-        "--retry-sleep", str(config.vllm.retry_sleep),
-        "--generated-text-dir", str(config.storage.responses),
-        *_flag(config.prompt.answer_only, "--answer-only"),
-        *_flag(force, "--rerun-existing"),
-    ]
-    if config.vllm.max_tokens:
-        args.extend(["--max-new-tokens", str(config.vllm.max_tokens)])
-    run_script("src/math_cued_activation/_compat_scripts/generate_imo_text_vllm.py", args)
+    generate_from_config(config, force=force)
 
 
 def capture(config: PipelineConfig, *, force: bool = False) -> None:
