@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <title>ICA Lens Document</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --text: #151922;
+      --muted: #647084;
+      --border: #cbd3df;
+      --accent: #1f6feb;
+      --accent-soft: #e8f1ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .muted { color: var(--muted); }
+    .error {
+      color: #b42318;
+      background: #fff1f0;
+      border: 1px solid #ffccc7;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    mark {
+      background: #fff176;
+      color: #111827;
+      border: 2px solid #f97316;
+      border-radius: 3px;
+      padding: 0 2px;
+    }
+    mark.activation {
+      border: 0;
+      background: rgba(31, 111, 235, var(--alpha, 0.25));
+      color: inherit;
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+    mark.activation.target {
+      outline: 2px solid #f97316;
+      outline-offset: 1px;
+    }
+    .inactive-suffix {
+      color: #94a3b8;
+      background: rgba(148, 163, 184, 0.10);
+    }
+  </style>
+</head>
+<body>
+  <pre id="doc"></pre>
+
+<script>
+const params = new URLSearchParams(location.search);
+const model = params.get("model") || "gpt2";
+const docId = params.get("doc_id") || "";
+const position = params.get("position") || "";
+const hintKey = params.get("hint") || "";
+const mode = params.get("mode") || "target";
+const layer = params.get("layer") || "";
+const feature = params.get("feature") || "";
+const els = {
+  doc: document.getElementById("doc"),
+};
+let rawText = "";
+
+async function api(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  return response.json();
+}
+
+async function init() {
+  const query = new URLSearchParams({ model, doc_id: docId });
+  if (position !== "") query.set("position", position);
+  if (layer) query.set("layer", layer);
+  if (feature !== "") query.set("feature", feature);
+  const hint = readHint();
+  let out = null;
+  try {
+    out = await api(`/api/document?${query.toString()}`);
+  } catch (error) {
+    if (!hint) throw error;
+    rawText = fallbackDocumentText(hint);
+    renderDocument(rawText, hint, null, null);
+    return;
+  }
+  rawText = out.text || "";
+  if (mode === "activations") renderDocument(rawText, hint, out.target_span || null, out.tokenized_prefix || null);
+  else renderDocument(rawText, hint, out.target_span || null, null);
+  if (mode === "activations" && layer && feature !== "") {
+    window.setTimeout(loadActivationOverlay, 0);
+  }
+}
+
+async function loadActivationOverlay() {
+  const query = new URLSearchParams({ model, layer, feature, doc_id: docId, min_relative: "0.2" });
+  if (position !== "") query.set("position", position);
+  try {
+    const out = await api(`/api/document-activations?${query.toString()}`);
+    renderActivationDocument(out.text || rawText, out.spans || [], out.activation_prefix_end);
+  } catch (error) {
+    console.error("Failed to load activation overlay", error);
+  }
+}
+
+function readHint() {
+  if (!hintKey) return null;
+  try {
+    return JSON.parse(localStorage.getItem(hintKey) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function fallbackDocumentText(hint) {
+  const marked = stripTargetMarks(String(hint.marked_context || ""));
+  if (marked) return marked;
+  const left = stripRankMarks(String(hint.left_context_ending_at_target || ""));
+  const right = String(hint.right_context_for_readability_not_causal_evidence || "");
+  const text = `${left}${right}`;
+  return text || String(hint.target_text || hint.text || "");
+}
+
+function renderDocument(text, hint, targetSpan, prefixInfo) {
+  const span = normalizedTargetSpan(text, targetSpan) || findTargetSpan(text, hint);
+  const prefixEnd = prefixInfo?.truncated ? normalizedPrefixEnd(text, prefixInfo.prefix_end) : null;
+  if (!span) {
+    renderTextWithInactiveSuffix(text, prefixEnd);
+    return;
+  }
+  const children = [];
+  appendTextWithInactiveSuffix(children, text, 0, span.start, prefixEnd);
+  const mark = document.createElement("mark");
+  mark.id = "target-token";
+  mark.textContent = text.slice(span.start, span.end);
+  children.push(mark);
+  appendTextWithInactiveSuffix(children, text, span.end, text.length, prefixEnd);
+  els.doc.replaceChildren(...children);
+  mark.scrollIntoView({ block: "center" });
+}
+
+function renderActivationDocument(text, spans, activationPrefixEnd) {
+  const prefixEnd = normalizedPrefixEnd(text, activationPrefixEnd);
+  const cleanSpans = spans
+    .map(span => ({
+      start: Number(span.start),
+      end: Number(span.end),
+      activation: Number(span.activation),
+      relative: Number(span.relative),
+      target: Boolean(span.target),
+      tokenIndex: Number(span.token_index),
+    }))
+    .filter(span => Number.isInteger(span.start) && Number.isInteger(span.end) && span.start >= 0 && span.end > span.start && span.end <= text.length)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  if (!cleanSpans.length) {
+    renderTextWithInactiveSuffix(text, prefixEnd);
+    return;
+  }
+  const children = [];
+  let cursor = 0;
+  for (const span of cleanSpans) {
+    if (span.start < cursor) continue;
+    if (span.start > cursor) children.push(document.createTextNode(text.slice(cursor, span.start)));
+    const mark = document.createElement("mark");
+    mark.className = `activation${span.target ? " target" : ""}`;
+    mark.style.setProperty("--alpha", String(Math.max(0.18, Math.min(0.85, 0.15 + span.relative * 0.70))));
+    mark.title = `token ${span.tokenIndex}: activation ${span.activation.toFixed(3)}, relative ${span.relative.toFixed(3)}`;
+    mark.textContent = text.slice(span.start, span.end);
+    children.push(mark);
+    cursor = span.end;
+  }
+  appendTextWithInactiveSuffix(children, text, cursor, text.length, prefixEnd);
+  els.doc.replaceChildren(...children);
+  const target = els.doc.querySelector("mark.target") || els.doc.querySelector("mark.activation");
+  if (target) target.scrollIntoView({ block: "center" });
+}
+
+function renderTextWithInactiveSuffix(text, prefixEnd) {
+  const children = [];
+  appendTextWithInactiveSuffix(children, text, 0, text.length, prefixEnd);
+  els.doc.replaceChildren(...children);
+}
+
+function appendTextWithInactiveSuffix(children, text, start, end, prefixEnd) {
+  if (end <= start) return;
+  if (prefixEnd == null || start >= prefixEnd) {
+    const span = document.createElement("span");
+    span.className = prefixEnd == null ? "" : "inactive-suffix";
+    span.textContent = text.slice(start, end);
+    children.push(span);
+    return;
+  }
+  if (end <= prefixEnd) {
+    children.push(document.createTextNode(text.slice(start, end)));
+    return;
+  }
+  children.push(document.createTextNode(text.slice(start, prefixEnd)));
+  const suffix = document.createElement("span");
+  suffix.className = "inactive-suffix";
+  suffix.textContent = text.slice(prefixEnd, end);
+  children.push(suffix);
+}
+
+function normalizedPrefixEnd(text, value) {
+  const prefixEnd = Number(value);
+  if (!Number.isInteger(prefixEnd) || prefixEnd <= 0 || prefixEnd >= text.length) return null;
+  return prefixEnd;
+}
+
+function normalizedTargetSpan(text, targetSpan) {
+  if (!targetSpan || targetSpan.available === false) return null;
+  const start = Number(targetSpan.start);
+  const end = Number(targetSpan.end);
+  if (!Number.isInteger(start) || !Number.isInteger(end)) return null;
+  if (start < 0 || end <= start || end > text.length) return null;
+  return { start, end };
+}
+
+function findTargetSpan(text, hint) {
+  if (!hint) return null;
+  const target = String(hint.target_text || hint.text || "");
+  const context = stripRankMarks(String(hint.left_context_ending_at_target || ""));
+  if (!target || !context) return null;
+  let needle = context;
+  let index = text.indexOf(needle);
+  while (index < 0 && needle.length > Math.max(40, target.length)) {
+    needle = needle.slice(Math.max(1, Math.floor(needle.length * 0.20)));
+    index = text.indexOf(needle);
+  }
+  if (index < 0) return null;
+  const contextEnd = index + needle.length;
+  const targetStart = contextEnd - target.length;
+  if (targetStart < index || text.slice(targetStart, contextEnd) !== target) {
+    const fallback = text.lastIndexOf(target, contextEnd);
+    if (fallback < index) return null;
+    return { start: fallback, end: fallback + target.length };
+  }
+  return { start: targetStart, end: contextEnd };
+}
+
+function stripRankMarks(text) {
+  return text.replace(/\[(?:10|[1-9])\]/g, "");
+}
+
+function stripTargetMarks(text) {
+  return stripRankMarks(text).replace(/\[\/?target\]/g, "");
+}
+
+function visibleToken(value) {
+  const text = String(value || "");
+  if (text === " ") return "[space]";
+  if (text === "\n") return "[newline]";
+  return text.replace(/\r/g, "\\r").replace(/\n/g, "\\n").replace(/\t/g, "\\t");
+}
+
+init().catch(error => {
+  els.doc.innerHTML = `<div class="error">${String(error.message || error)}</div>`;
+});
+</script>
+</body>
+</html>

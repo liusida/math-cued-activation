@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <title>ICA Lens Feature</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #fff;
+      --text: #151922;
+      --muted: #647084;
+      --border: #cbd3df;
+      --accent: #1f6feb;
+      --accent-soft: #e8f1ff;
+      --warn: #a15c00;
+      --shadow: 0 1px 2px rgb(20 25 34 / .08), 0 10px 30px rgb(20 25 34 / .06);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      padding: 12px 18px;
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    h1 { margin: 0; font-size: 19px; letter-spacing: 0; }
+    .nav { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .nav a { color: var(--accent); font-weight: 750; text-decoration: none; }
+    .nav a:hover { text-decoration: underline; }
+    main {
+      max-width: 1320px;
+      margin: 18px auto 40px;
+      padding: 0 18px;
+      display: grid;
+      gap: 14px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+    .toolbar {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .toolbar-left { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    select, input, button {
+      min-height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      padding: 6px 8px;
+      font: inherit;
+    }
+    select { min-width: 150px; }
+    input { width: 110px; font-variant-numeric: tabular-nums; }
+    button,
+    .button-link {
+      cursor: pointer;
+      font-weight: 800;
+      color: var(--accent);
+      border-color: #b7cdf5;
+      background: var(--accent-soft);
+    }
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      border: 1px solid #b7cdf5;
+      border-radius: 6px;
+      padding: 6px 8px;
+      text-decoration: none;
+    }
+    button:hover,
+    .button-link:hover { border-color: var(--accent); }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .side-column {
+      display: grid;
+      gap: 14px;
+    }
+    .manual-label-editor {
+      display: grid;
+      gap: 10px;
+    }
+    .manual-label-editor h2 { margin: 0; font-size: 17px; }
+    .manual-label-editor textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px;
+      color: var(--text);
+      background: #fff;
+      font: inherit;
+      line-height: 1.45;
+    }
+    .manual-label-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .summary-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .summary-title h2 { margin: 0; font-size: 22px; letter-spacing: 0; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #eef2f7;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .metric {
+      border: 1px solid #e3e8f0;
+      border-radius: 7px;
+      padding: 8px;
+      background: #fbfcfe;
+      min-width: 0;
+    }
+    .metric .name {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+    .metric .value {
+      margin-top: 2px;
+      font-size: 16px;
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+    .annotation-box {
+      display: grid;
+      gap: 5px;
+      margin-top: 10px;
+      padding: 9px;
+      border: 1px solid #b7cdf5;
+      border-radius: 7px;
+      background: var(--accent-soft);
+      color: #1f2a3a;
+    }
+    .annotation-box details {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .annotation-box summary {
+      cursor: pointer;
+      font-weight: 800;
+    }
+    .annotation-box p {
+      margin: 5px 0 0;
+    }
+    .annotation-item {
+      display: grid;
+      gap: 4px;
+      padding-top: 8px;
+      border-top: 1px solid #c9daf8;
+    }
+    .annotation-item:first-child {
+      padding-top: 0;
+      border-top: 0;
+    }
+    .annotation-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .annotation-meta {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .simple-label {
+      display: inline-flex;
+      width: fit-content;
+      max-width: 100%;
+      margin-top: 2px;
+      padding: 2px 6px;
+      border: 1px solid #b7cdf5;
+      border-radius: 5px;
+      background: #fff;
+      color: #1f2a3a;
+      font-size: 12px;
+      font-weight: 400;
+      overflow-wrap: anywhere;
+    }
+    .refinement-box {
+      margin-top: 10px;
+      border: 1px solid #d6c4f5;
+      border-radius: 7px;
+      background: #fbf8ff;
+      color: #1f2a3a;
+    }
+    .refinement-box > summary {
+      cursor: pointer;
+      padding: 9px;
+      font-weight: 850;
+      color: #58348f;
+    }
+    .refinement-body {
+      display: grid;
+      gap: 8px;
+      padding: 0 9px 9px;
+    }
+    .refinement-round {
+      display: grid;
+      gap: 5px;
+      border-top: 1px solid #e3d7fa;
+      padding-top: 8px;
+    }
+    .refinement-round:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .annotation-chain {
+      border-top: 1px solid #e3d7fa;
+      padding-top: 8px;
+    }
+    .annotation-chain:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .annotation-chain > summary {
+      cursor: pointer;
+      font-weight: 850;
+      color: #58348f;
+    }
+    .annotation-chain-body {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+      padding-left: 8px;
+      border-left: 2px solid #e3d7fa;
+    }
+    .test-row {
+      margin-top: 5px;
+      padding: 6px;
+      border: 1px solid #e3e8f0;
+      border-radius: 6px;
+      background: #fff;
+    }
+    .token-heatmap {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 3px;
+      margin-top: 6px;
+      padding: 6px;
+      border: 1px solid #e8edf5;
+      border-radius: 6px;
+      background: #fbfcfe;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .token-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 1px 4px;
+      border: 1px solid rgb(31 111 235 / .12);
+      border-radius: 4px;
+      color: #111827;
+      white-space: pre-wrap;
+    }
+    .token-chip.best {
+      border-color: #111827;
+      box-shadow: inset 0 0 0 1px #111827;
+      font-weight: 850;
+    }
+    .test-pass { color: #18794e; font-weight: 850; }
+    .test-fail { color: #b42318; font-weight: 850; }
+    .histogram {
+      width: 100%;
+      min-height: 86px;
+      border: 1px solid #e3e8f0;
+      border-radius: 7px;
+      background: #fbfcfe;
+      margin-top: 10px;
+    }
+    .opposite {
+      display: block;
+      margin-top: 10px;
+      color: var(--accent);
+      font-weight: 850;
+      text-decoration: none;
+    }
+    .opposite:hover { text-decoration: underline; }
+    .muted { color: var(--muted); }
+    .empty, .error {
+      color: var(--muted);
+      padding: 12px;
+    }
+    .error {
+      color: #b42318;
+      background: #fff1f0;
+      border: 1px solid #ffccc7;
+      border-radius: 8px;
+    }
+    .samples {
+      display: grid;
+      gap: 12px;
+    }
+    .sample {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      padding: 12px;
+    }
+    .sample-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .sample-title {
+      font-weight: 900;
+    }
+    .sample-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .sample-actions .icon-button {
+      display: inline-grid;
+      place-items: center;
+      width: 30px;
+      min-width: 30px;
+      min-height: 28px;
+      height: 28px;
+      padding: 0;
+      font-size: 15px;
+      line-height: 1;
+    }
+    .context {
+      margin: 8px 0 0;
+      padding: 10px;
+      border: 1px solid #e3e8f0;
+      border-radius: 7px;
+      background: #fbfcfe;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-height: 320px;
+      overflow: auto;
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .context-target {
+      display: inline;
+      padding: 1px 3px;
+      border-radius: 4px;
+      background: #bfdbfe;
+      color: #0f172a;
+      box-shadow: inset 0 0 0 1px #60a5fa;
+      font-weight: 800;
+    }
+    .erf {
+      display: grid;
+      gap: 6px;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    @media (max-width: 860px) {
+      .top { align-items: flex-start; flex-direction: column; }
+      .layout { grid-template-columns: 1fr; }
+      .metric-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="top">
+      <h1>ICA Lens Feature</h1>
+      <nav class="nav" aria-label="Primary">
+        <a href="/" data-nav-route="/">Explorer</a>
+        <a href="/sae-explorer" data-nav-route="/sae-explorer">SAE Explorer</a>
+        <a href="/stats" data-nav-route="/stats">Stats</a>
+        <a href="/feature" data-nav-route="/feature">Feature</a>
+        <a href="/annotate" data-nav-route="/annotate">Annotate</a>
+        <a href="/random-components" data-nav-route="/random-components">Random</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="panel">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <label>
+            Model
+            <select id="modelSelect"></select>
+          </label>
+          <label>
+            Layer
+            <select id="layerSelect"></select>
+          </label>
+          <label>
+            Feature
+            <input id="featureInput" type="number" min="0" step="1" />
+          </label>
+          <button id="loadButton" type="button">Load</button>
+        </div>
+        <div id="status" class="muted">Loading...</div>
+      </div>
+    </div>
+
+    <div id="message" class="empty">Loading feature...</div>
+    <div id="content" class="layout" hidden>
+      <div class="side-column">
+        <aside class="panel" id="summary"></aside>
+        <section class="panel manual-label-editor" id="manualLabelPanel">
+          <h2>Manual label</h2>
+          <label for="manualLabelInput">Your note for this feature</label>
+          <textarea id="manualLabelInput" maxlength="10000" placeholder="Add a manual label or note..."></textarea>
+          <div class="manual-label-actions">
+            <span id="manualLabelStatus" class="muted"></span>
+            <button id="saveManualLabel" type="button">Save</button>
+          </div>
+        </section>
+      </div>
+      <section class="panel">
+        <div class="summary-title">
+          <h2>Top Samples</h2>
+          <span id="sampleCount" class="pill"></span>
+        </div>
+        <div id="samples" class="samples"></div>
+      </section>
+    </div>
+  </main>
+
+<script>
+const els = {
+  model: document.getElementById("modelSelect"),
+  layer: document.getElementById("layerSelect"),
+  feature: document.getElementById("featureInput"),
+  load: document.getElementById("loadButton"),
+  status: document.getElementById("status"),
+  message: document.getElementById("message"),
+  content: document.getElementById("content"),
+  summary: document.getElementById("summary"),
+  manualLabelPanel: document.getElementById("manualLabelPanel"),
+  manualLabelInput: document.getElementById("manualLabelInput"),
+  manualLabelStatus: document.getElementById("manualLabelStatus"),
+  saveManualLabel: document.getElementById("saveManualLabel"),
+  sampleCount: document.getElementById("sampleCount"),
+  samples: document.getElementById("samples"),
+};
+
+const params = new URLSearchParams(location.search);
+const PAGE_KIND = location.pathname.includes("sae-feature") ? "sae" : "ica";
+const state = {
+  models: [],
+  layers: [],
+  model: params.get("model") || "gpt2",
+  layer: params.get("layer") || "",
+  feature: Number(params.get("feature") || params.get("component") || 0),
+  detail: null,
+  sampleContexts: [],
+};
+
+async function api(url, options = {}) {
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.json();
+      message = body.detail || message;
+    } catch {}
+    throw new Error(message);
+  }
+  return response.json();
+}
+
+async function init() {
+  els.load.onclick = () => loadFeatureFromControls(true);
+  els.model.onchange = () => loadLayers();
+  els.layer.onchange = () => loadFeatureFromControls(true);
+  els.feature.onkeydown = event => {
+    if (event.key === "Enter") loadFeatureFromControls(true);
+  };
+  els.saveManualLabel.onclick = saveManualLabel;
+  els.samples.onclick = event => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    if (button.dataset.documentIndex !== undefined) openDocument(Number(button.dataset.documentIndex));
+    if (button.dataset.activationDocumentIndex !== undefined) openActivationDocument(Number(button.dataset.activationDocumentIndex));
+    if (button.dataset.copyIndex !== undefined) copyText(state.sampleContexts[Number(button.dataset.copyIndex)] || "");
+  };
+  await loadModels();
+}
+
+async function loadModels() {
+  setStatus("Loading models...");
+  const out = await api("/api/models");
+  state.models = out.models || [];
+  els.model.innerHTML = state.models.map(model => `<option value="${escAttr(model.model_name)}">${esc(model.model_name)}</option>`).join("");
+  if (state.models.some(model => model.model_name === state.model)) els.model.value = state.model;
+  else if (state.models.length) els.model.value = state.models[0].model_name;
+  await loadLayers();
+}
+
+async function loadLayers() {
+  state.model = els.model.value;
+  setStatus("Loading layers...");
+  const out = await api(`/api/layers?model=${encodeURIComponent(state.model)}`);
+  state.layers = out.layers || [];
+  els.layer.innerHTML = state.layers.map(layer => `<option value="${escAttr(layer)}">${esc(layer)}</option>`).join("");
+  if (state.layer && state.layers.includes(state.layer)) els.layer.value = state.layer;
+  else if (state.layers.length) els.layer.value = state.layers[0];
+  await loadFeatureFromControls(false);
+}
+
+async function loadFeatureFromControls(pushUrl) {
+  state.model = els.model.value;
+  state.layer = els.layer.value;
+  state.feature = Number(els.feature.value || state.feature || 0);
+  els.feature.value = String(state.feature);
+  updateNavLinks();
+  if (!state.layer) return;
+  setStatus("Loading feature...");
+  els.message.hidden = false;
+  els.message.className = "empty";
+  els.message.textContent = "Loading feature...";
+  els.content.hidden = true;
+  try {
+    const query = new URLSearchParams({ model: state.model, layer: state.layer, feature: String(state.feature) });
+    const route = PAGE_KIND === "sae" ? "/sae-feature" : "/feature";
+    const apiRoute = PAGE_KIND === "sae" ? "/api/sae-feature" : "/api/feature";
+    state.detail = await api(`${apiRoute}?${query.toString()}`);
+    if (pushUrl) history.replaceState(null, "", `${route}?${query.toString()}`);
+    renderFeature();
+    setStatus("");
+  } catch (error) {
+    els.message.className = "error";
+    els.message.textContent = error.message || String(error);
+    setStatus("Feature unavailable");
+  }
+}
+
+function updateNavLinks() {
+  const baseParams = new URLSearchParams();
+  if (els.model.value) baseParams.set("model", els.model.value);
+  if (els.layer.value) baseParams.set("layer", els.layer.value);
+  document.querySelectorAll("[data-nav-route]").forEach(link => {
+    const route = link.dataset.navRoute || "/";
+    const params = new URLSearchParams(baseParams);
+    if (route === "/feature") params.set("feature", String(els.feature.value || state.feature || 0));
+    link.href = params.toString() ? `${route}?${params.toString()}` : route;
+  });
+}
+
+function renderFeature() {
+  const detail = state.detail;
+  const feature = detail.feature;
+  const evidence = detail.evidence || {};
+  const examples = evidence.erf_examples || evidence.examples || [];
+  els.message.hidden = true;
+  els.content.hidden = false;
+  state.sampleContexts = examples.map(example => sampleContextText(example));
+  els.summary.innerHTML = renderSummary(detail);
+  els.manualLabelPanel.hidden = detail.kind === "sae";
+  els.manualLabelInput.value = feature.manual_label || "";
+  els.manualLabelStatus.textContent = "";
+  els.sampleCount.textContent = `${examples.length} sample${examples.length === 1 ? "" : "s"}`;
+  els.samples.innerHTML = examples.length ? examples.map((example, index) => renderSample(example, index)).join("") : `<div class="empty">No evidence JSON found for this feature.</div>`;
+}
+
+async function saveManualLabel() {
+  if (!state.detail || state.detail.kind === "sae") return;
+  const manualLabel = els.manualLabelInput.value;
+  els.saveManualLabel.disabled = true;
+  els.manualLabelStatus.textContent = "Saving...";
+  try {
+    const out = await api("/api/feature/manual-label", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: state.model,
+        layer: state.layer,
+        feature: state.feature,
+        manual_label: manualLabel,
+      }),
+    });
+    state.detail.feature.manual_label = out.manual_label || "";
+    els.manualLabelInput.value = state.detail.feature.manual_label;
+    els.manualLabelStatus.textContent = "Saved";
+  } catch (error) {
+    els.manualLabelStatus.textContent = error.message || String(error);
+  } finally {
+    els.saveManualLabel.disabled = false;
+  }
+}
+
+function renderSummary(detail) {
+  if (detail.kind === "sae") return renderSaeSummary(detail);
+  const feature = detail.feature;
+  const opposite = detail.opposite_feature;
+  const source = `C${feature.source_component_index} ${feature.source_side}`;
+  const oppositeHref = opposite ? featureUrl(opposite.feature_id) : "";
+  return `
+    <div class="summary-title">
+      <h2>${esc(feature.feature_label)}</h2>
+      <span class="pill">${esc(feature.layer)}</span>
+    </div>
+    <div class="muted">${esc(detail.model)} / ${esc(source)}</div>
+    ${renderAnnotationHistory(detail)}
+    <div class="metric-grid">
+      ${metric("Kurtosis", fmt(feature.kurtosis, 3))}
+      ${metric("Excess K", fmt(feature.excess_kurtosis, 3))}
+      ${metric("Active %", pct(feature.activation_frequency, 2))}
+      ${metric("Active >1 %", pct(feature.activation_frequency_gt_1, 2))}
+      ${metric("Max", fmt(feature.max_activation, 3))}
+      ${metric("ERF", fmt(feature.effective_context_mean, 1))}
+      ${metric("Top-1 Count", fmt(feature.top1_count, 0))}
+      ${metric("Top-1 /10k", per10k(feature.top1_frequency, 1))}
+      ${metric("Top-3 Count", fmt(feature.top3_count, 0))}
+      ${metric("Top-3 /10k", per10k(feature.top3_frequency, 1))}
+      ${metric("Mean", fmt(feature.mean, 4))}
+      ${metric("Variance", fmt(feature.variance, 4))}
+    </div>
+    <div class="muted">Source feature id: ${feature.source_feature_id}. Dead by top-3 scan: ${feature.dead ? "yes" : "no"}. Top-1 dead: ${feature.top1_dead ? "yes" : "no"}. Kurtosis-dead diagnostic: ${feature.kurtosis_dead ? "yes" : "no"}.</div>
+    ${opposite ? `<a class="opposite" href="${escAttr(oppositeHref)}">Opposite side: ${esc(opposite.feature_label)} (${esc(opposite.source_side)})</a>` : `<div class="muted">No opposite-side feature found.</div>`}
+    <img class="histogram" src="${escAttr(feature.mini_histogram_url)}" alt="Mini histogram for ${escAttr(feature.feature_label)}" />
+  `;
+}
+
+function renderSaeSummary(detail) {
+  const feature = detail.feature || {};
+  const neuronpedia = feature.neuronpedia_label ? `
+    <div class="annotation-box">
+      <div class="annotation-item">
+        <div class="annotation-head">
+          <b>Neuronpedia</b>
+          ${feature.neuronpedia_url ? `<a class="annotation-meta" href="${escAttr(feature.neuronpedia_url)}" target="_blank" rel="noopener noreferrer">Open</a>` : ""}
+        </div>
+        <div>${esc(feature.neuronpedia_label)}</div>
+      </div>
+    </div>
+  ` : "";
+  return `
+    <div class="summary-title">
+      <h2>${esc(feature.feature_label)}</h2>
+      <span class="pill">${esc(feature.layer)}</span>
+    </div>
+    <div class="muted">${esc(detail.model)} / SAE counterpart</div>
+    ${renderAnnotationHistory(detail)}
+    ${neuronpedia}
+    <div class="metric-grid">
+      ${metric("SAE Width", fmt(feature.d_sae, 0))}
+      ${metric("Top-K", fmt(feature.sae_top_k, 0))}
+      ${metric("Activation", feature.sae_activation || "?")}
+      ${metric("Evidence", feature.annotation_evidence_path ? "yes" : "missing")}
+    </div>
+    <div class="muted">${esc(feature.sae_model_name || "")}</div>
+    <div class="muted">${esc(feature.sae_repo_id || "")}</div>
+  `;
+}
+
+function renderAnnotations(detail) {
+  const annotations = annotationItems(detail);
+  if (!annotations.length) return "";
+  return `
+    <div class="annotation-box">
+      ${annotations.map(renderAnnotationItem).join("")}
+    </div>
+  `;
+}
+
+function renderAnnotationHistory(detail) {
+  const annotations = annotationItems(detail);
+  const refinements = Array.isArray(detail.refinements) ? detail.refinements : [];
+  if (!refinements.length) return renderAnnotations(detail);
+  const chains = annotationChains(detail);
+  const runCount = chains.length;
+  return `
+    ${renderCurrentAnnotation(detail)}
+    <details class="refinement-box">
+      <summary>Annotation runs (${fmt(runCount, 0)})</summary>
+      <div class="refinement-body">
+        ${chains.map(renderAnnotationChain).join("")}
+      </div>
+    </details>
+  `;
+}
+
+function annotationChains(detail) {
+  const feature = detail.feature || {};
+  const annotations = annotationItems(detail);
+  const refinements = Array.isArray(detail.refinements) ? detail.refinements : [];
+  const currentProvider = baseProviderLabel(feature.annotation_provider || "");
+  const groups = new Map();
+
+  function ensureGroup(providerLabel, model) {
+    const provider = baseProviderLabel(providerLabel || "annotation");
+    const key = provider || "annotation";
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        provider,
+        model: model || "",
+        initial: [],
+        refinements: [],
+        current: currentProvider && key === currentProvider,
+      });
+    }
+    const group = groups.get(key);
+    if (!group.model && model) group.model = model;
+    if (currentProvider && key === currentProvider) group.current = true;
+    return group;
+  }
+
+  for (const item of annotations) {
+    const group = ensureGroup(item.provider_label || item.provider || "annotation", item.model || "");
+    group.initial.push(item);
+  }
+  for (const round of refinements) {
+    const group = ensureGroup(round.provider_label || round.provider || "refinement", round.model || "");
+    group.refinements.push(round);
+  }
+
+  return Array.from(groups.values())
+    .map(group => ({
+      ...group,
+      initial: group.initial.sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || ""))),
+      refinements: group.refinements.sort((a, b) => Number(a.round_index || 0) - Number(b.round_index || 0)),
+    }))
+    .sort((a, b) => {
+      if (a.current !== b.current) return a.current ? -1 : 1;
+      const aTime = latestAnnotationTime(a);
+      const bTime = latestAnnotationTime(b);
+      return String(bTime).localeCompare(String(aTime));
+    });
+}
+
+function baseProviderLabel(value) {
+  const text = String(value || "");
+  return text.split(":refinement:")[0] || text;
+}
+
+function latestAnnotationTime(group) {
+  const times = [
+    ...group.initial.map(item => item.created_at || ""),
+    ...group.refinements.map(item => item.created_at || ""),
+  ].filter(Boolean);
+  return times.sort().at(-1) || "";
+}
+
+function renderAnnotationChain(chain) {
+  const steps = chain.initial.length + chain.refinements.length;
+  const model = chain.model ? ` · ${chain.model}` : "";
+  const current = chain.current ? " · current" : "";
+  return `
+    <details class="annotation-chain" ${chain.current ? "open" : ""}>
+      <summary>${esc(chain.provider)}${esc(model)}${esc(current)} · ${fmt(steps, 0)} steps</summary>
+      <div class="annotation-chain-body">
+        ${chain.initial.map(renderInitialAnnotationRound).join("")}
+        ${chain.refinements.map(renderRefinementRound).join("")}
+      </div>
+    </details>
+  `;
+}
+
+function renderCurrentAnnotation(detail) {
+  const feature = detail.feature || {};
+  const label = feature.annotation_label || feature.annotation_simple_label || feature.feature_label || "";
+  if (!label) return "";
+  const provider = feature.annotation_provider || "annotation";
+  const confidence = feature.annotation_confidence || "";
+  const model = feature.annotation_model || "";
+  const sourceParts = [model, provider, confidence, "current"].filter(Boolean);
+  const simpleLabel = feature.annotation_simple_label && feature.annotation_simple_label !== label ? `<div class="simple-label">${esc(feature.annotation_simple_label)}</div>` : "";
+  const description = feature.annotation_description ? `<div>${esc(feature.annotation_description)}</div>` : "";
+  return `
+    <div class="annotation-box">
+      <div class="annotation-item">
+        <div class="annotation-head">
+          <b>${esc(label)}</b>
+        </div>
+        ${simpleLabel}
+        ${description}
+        ${sourceParts.length ? `<div class="annotation-meta">${esc(sourceParts.join(" · "))}</div>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function annotationItems(detail) {
+  const feature = detail.feature || {};
+  const annotations = Array.isArray(detail.annotations) ? detail.annotations.filter(item => item && (item.label || item.simple_label)) : [];
+  if (annotations.length) return annotations;
+  const label = feature.annotation_label || feature.annotation_simple_label || "";
+  if (!label) return [];
+  return [{
+    provider_label: feature.annotation_provider || "imported",
+    provider: feature.annotation_provider || "",
+    model: feature.annotation_model || "",
+    label,
+    simple_label: feature.annotation_simple_label || "",
+    description: feature.annotation_description || "",
+    reasoning: feature.annotation_reasoning || "",
+    confidence: feature.annotation_confidence || "",
+    active: true,
+  }];
+}
+
+function renderAnnotationItem(item) {
+  const label = item.label || item.simple_label || "";
+  const provider = item.provider_label || item.provider || "annotation";
+  const active = item.active ? " · active" : "";
+  const confidence = item.confidence ? ` · ${item.confidence}` : "";
+  const model = item.model || "";
+  const description = item.description ? `<div>${esc(item.description)}</div>` : "";
+  const reasoning = item.reasoning ? `<details><summary>Reasoning</summary><p>${esc(item.reasoning)}</p></details>` : "";
+  const tests = Array.isArray(item.test_cases) && item.test_cases.length ? `
+    <details>
+      <summary>Proposed tests</summary>
+      ${item.test_cases.map(test => `
+        <p><strong>${esc(test.expected || "?")}</strong>: ${esc(test.text || "")}<br>${esc(test.reason || "")}</p>
+      `).join("")}
+    </details>
+  ` : "";
+  return `
+    <div class="annotation-item">
+      <div class="annotation-head">
+        <b>${esc(label)}</b>
+        <span class="annotation-meta">${esc(provider)}${esc(confidence)}${esc(active)}</span>
+      </div>
+      ${description}
+      ${model ? `<div class="annotation-meta">${esc(model)}</div>` : ""}
+      ${reasoning}
+      ${tests}
+    </div>
+  `;
+}
+
+function renderRefinements(detail) {
+  const refinements = Array.isArray(detail.refinements) ? detail.refinements : [];
+  if (!refinements.length) return "";
+  const label = refinements.length === 1 ? "1 refinement round" : `${refinements.length} refinement rounds`;
+  return `
+    <details class="refinement-box">
+      <summary>${esc(label)}</summary>
+      <div class="refinement-body">
+        ${refinements.map(renderRefinementRound).join("")}
+      </div>
+    </details>
+  `;
+}
+
+function renderInitialAnnotationRound(item) {
+  const label = item.label || item.simple_label || "";
+  const provider = item.provider_label || item.provider || "annotation";
+  const confidence = item.confidence ? ` · ${item.confidence}` : "";
+  const model = item.model || "";
+  const description = item.description ? `<div>${esc(item.description)}</div>` : "";
+  const reasoning = item.reasoning ? `<details><summary>Reasoning</summary><p>${esc(item.reasoning)}</p></details>` : "";
+  const tests = Array.isArray(item.test_cases) && item.test_cases.length ? `
+    <details>
+      <summary>Proposed tests</summary>
+      ${item.test_cases.map(test => `
+        <p><strong>${esc(test.expected || "?")}</strong>: ${esc(test.text || "")}<br>${esc(test.reason || "")}</p>
+      `).join("")}
+    </details>
+  ` : "";
+  return `
+    <div class="refinement-round">
+      <div class="annotation-head">
+        <b>Initial · ${esc(provider)}</b>
+        <span class="annotation-meta">${esc(model)}${esc(confidence)}</span>
+      </div>
+      <div><b>${esc(label)}</b></div>
+      ${description}
+      ${reasoning}
+      ${tests}
+    </div>
+  `;
+}
+
+function renderRefinementRound(round) {
+  const before = round.label_before || {};
+  const after = round.annotation || {};
+  const tests = Array.isArray(round.test_results) ? round.test_results : [];
+  const checked = tests.filter(test => test && !test.error).length;
+  const provider = round.provider_label || round.provider || "refinement";
+  const title = `Round ${fmt(round.round_index, 0)} · ${provider}`;
+  const beforeLabel = before.label || before.simple_label || "";
+  const afterLabel = after.label || after.simple_label || "";
+  const confidence = after.confidence ? ` · ${after.confidence}` : "";
+  const changed = beforeLabel && afterLabel && beforeLabel !== afterLabel ? ` → <b>${esc(afterLabel)}</b>` : afterLabel ? `<b>${esc(afterLabel)}</b>` : "tests only";
+  return `
+    <div class="refinement-round">
+      <div class="annotation-head">
+        <b>${esc(title)}</b>
+        <span class="annotation-meta">${esc(round.model || "")}${esc(confidence)}</span>
+      </div>
+      <div>${beforeLabel ? `<span class="muted">${esc(beforeLabel)}</span> ` : ""}${changed}</div>
+      ${after.description ? `<div>${esc(after.description)}</div>` : ""}
+      ${after.reasoning ? `<details><summary>Correction reasoning</summary><p>${esc(after.reasoning)}</p></details>` : ""}
+      <details>
+        <summary>Test activations (${fmt(checked, 0)})</summary>
+        ${tests.map(renderRefinementTest).join("")}
+      </details>
+    </div>
+  `;
+}
+
+function renderRefinementTest(test) {
+  return `
+    <div class="test-row">
+      ${renderTokenHeatmap(test)}
+      ${test?.reason ? `<div class="muted">Why this was tested: ${esc(test.reason)}</div>` : ""}
+      ${test?.error ? `<div class="test-fail">${esc(test.error)}</div>` : ""}
+    </div>
+  `;
+}
+
+function renderTokenHeatmap(test) {
+  const tokens = Array.isArray(test?.scored_tokens) ? test.scored_tokens : [];
+  if (!tokens.length) return "";
+  const bestIndex = test?.best_token?.token_index;
+  return `
+    <div class="token-heatmap" aria-label="Token activation heatmap">
+      ${tokens.map(token => renderTokenChip(token, token.token_index === bestIndex)).join("")}
+    </div>
+  `;
+}
+
+function renderTokenChip(token, isBest) {
+  const relative = Math.max(0, Math.min(1, Number(token?.feature_relative || 0)));
+  const alpha = 0.08 + relative * 0.72;
+  const label = visibleToken(token?.token_text || "");
+  const title = `token ${label} · relative ${fmt(relative, 3)} · rank ${fmt(token?.feature_rank, 0)} · activation ${fmt(token?.feature_activation, 3)}`;
+  return `<span class="token-chip${isBest ? " best" : ""}" style="background: rgba(31, 111, 235, ${alpha.toFixed(3)})" title="${escAttr(title)}">${esc(label)}</span>`;
+}
+
+function metric(name, value) {
+  return `<div class="metric"><div class="name">${esc(name)}</div><div class="value">${esc(value)}</div></div>`;
+}
+
+function renderSample(example, index) {
+  const erf = example.effective_receptive_field || {};
+  const jump = erf.largest_observed_relative_score_jump || {};
+  const trace = jump.feature_rank_trace || {};
+  const sampleActions = state.detail?.kind === "sae"
+    ? `<button class="icon-button" type="button" data-copy-index="${index}" title="Copy context" aria-label="Copy context">⧉</button>`
+    : `
+          <button class="icon-button" type="button" data-document-index="${index}" title="Load document" aria-label="Load document">□</button>
+          <button class="icon-button" type="button" data-activation-document-index="${index}" title="Activation map" aria-label="Activation map">▥</button>
+          <button class="icon-button" type="button" data-copy-index="${index}" title="Copy context" aria-label="Copy context">⧉</button>
+        `;
+  return `
+    <article class="sample">
+      <div class="sample-head">
+        <div>
+          <div class="sample-title">Example ${Number.isFinite(Number(example.example_index)) ? Number(example.example_index) : index}</div>
+          <div class="muted">
+            token ${esc(visibleToken(example.target_token || example.text || example.token || ""))} · doc ${esc(example.doc_id)} · pos ${esc(example.position)}
+            · activation ${fmt(example.activation, 3)} · relative ${fmt(example.relative_activation, 3)}
+          </div>
+        </div>
+        <div class="sample-actions">
+          ${sampleActions}
+        </div>
+      </div>
+      <div class="erf">
+        <div>Estimated ERF length: <strong>${fmt(erf.estimated_effective_receptive_field_length, 0)}</strong></div>
+        <div>Largest observed relative-score jump: ${fmt(jump.from_relative_score, 3)} → ${fmt(jump.to_relative_score, 3)} over context length ${fmt(jump.from_context_length, 0)} → ${fmt(jump.to_context_length, 0)}</div>
+        ${trace.note ? `<div>${esc(trace.note)}</div>` : ""}
+      </div>
+      <pre class="context">${renderSampleContext(example)}</pre>
+    </article>
+  `;
+}
+
+function openDocument(index) {
+  openDocumentMode(index, "target");
+}
+
+function openActivationDocument(index) {
+  openDocumentMode(index, "activations");
+}
+
+function openDocumentMode(index, mode) {
+  const evidence = state.detail?.evidence || {};
+  const examples = evidence.erf_examples || evidence.examples || [];
+  const example = examples[index];
+  if (!example) return;
+  const key = `icaLensV9.documentHint.${state.model}.${example.doc_id}.${example.position}.${Date.now()}`;
+  localStorage.setItem(key, JSON.stringify({
+    target_text: example.target_token || example.text || example.token || "",
+    left_context_ending_at_target: documentHintContext(example),
+    right_context_for_readability_not_causal_evidence: example.right_context_for_readability_not_causal_evidence || "",
+    marked_context: example.marked_context || "",
+    feature_id: state.feature,
+    layer: state.layer,
+    example_index: example.example_index,
+  }));
+  const params = new URLSearchParams({
+    model: state.model,
+    layer: state.layer,
+    feature: String(state.feature),
+    doc_id: String(example.doc_id),
+    position: String(example.position),
+    hint: key,
+  });
+  if (mode === "activations") params.set("mode", "activations");
+  window.open(`/document?${params.toString()}`, "_blank", "noopener,noreferrer");
+}
+
+function sampleContext(example) {
+  const erf = example.effective_receptive_field || {};
+  const jump = erf.largest_observed_relative_score_jump || {};
+  const trace = jump.feature_rank_trace || {};
+  return (
+    jumpContext(example) ||
+    trace.marked_replay_context_ending_at_target ||
+    bestContext(erf) ||
+    readableMarkedContext(example) ||
+    example.left_context_ending_at_target ||
+    example.target_token ||
+    example.text ||
+    ""
+  );
+}
+
+function renderSampleContext(example) {
+  const erf = example?.effective_receptive_field || {};
+  const jump = erf.largest_observed_relative_score_jump || {};
+  const trace = jump.feature_rank_trace || {};
+  const measured = jumpContext(example) || trace.marked_replay_context_ending_at_target || bestContext(erf);
+  if (measured) return renderMarkedContext(measured);
+  const text = String(example?.context_text || "");
+  const start = Number(example?.target_char_start);
+  const end = Number(example?.target_char_end);
+  if (text && Number.isInteger(start) && Number.isInteger(end) && start >= 0 && start <= end && end <= text.length) {
+    return `${esc(text.slice(0, start))}<span class="context-target">${esc(text.slice(start, end))}</span>${esc(text.slice(end))}`;
+  }
+  return renderLegacySampleContext(example);
+}
+
+function renderLegacySampleContext(example) {
+  const left = String(example?.left_context_ending_at_target || "");
+  const right = String(example?.right_context_for_readability_not_causal_evidence || example?.next_text_hint || "");
+  if (!left) return renderMarkedContext(readableMarkedContext(example) || example?.target_token || example?.text || "");
+  let targetStart = left.length;
+  const target = String(example?.target_token || example?.text || example?.token || "");
+  if (target && !target.includes("�") && left.endsWith(target)) {
+    targetStart = left.length - target.length;
+  } else if (target.includes("�")) {
+    const finalCharacter = Array.from(left).at(-1) || "";
+    targetStart = left.length - finalCharacter.length;
+  } else {
+    const marked = String(example?.marked_context || "");
+    const markerIndex = marked.indexOf("[target]");
+    if (markerIndex >= 0) targetStart = commonPrefixLength(left, marked.slice(0, markerIndex));
+  }
+  targetStart = Math.max(0, Math.min(left.length, targetStart));
+  return `${esc(left.slice(0, targetStart))}<span class="context-target">${esc(left.slice(targetStart))}</span>${esc(right)}`;
+}
+
+function commonPrefixLength(a, b) {
+  const limit = Math.min(a.length, b.length);
+  let index = 0;
+  while (index < limit && a[index] === b[index]) index += 1;
+  return index;
+}
+
+function sampleContextText(example) {
+  const text = String(example?.context_text || "");
+  if (text) return text;
+  const left = String(example?.left_context_ending_at_target || "");
+  const right = String(example?.right_context_for_readability_not_causal_evidence || example?.next_text_hint || "");
+  return left || right ? `${left}${right}` : sampleContext(example);
+}
+
+function readableMarkedContext(example) {
+  const marked = String(example?.marked_context || "");
+  if (marked && !marked.includes("�")) return marked;
+  return String(example?.left_context_ending_at_target || "");
+}
+
+function renderMarkedContext(text) {
+  const raw = String(text || "");
+  const parts = raw.split(/(\[target\]|\[\/target\])/g);
+  let inside = false;
+  return parts.map(part => {
+    if (part === "[target]") {
+      inside = true;
+      return "";
+    }
+    if (part === "[/target]") {
+      inside = false;
+      return "";
+    }
+    if (!part) return "";
+    const value = esc(part);
+    return inside ? `<span class="context-target">${value}</span>` : value;
+  }).join("");
+}
+
+function documentHintContext(example) {
+  return (
+    jumpContext(example) ||
+    bestContext(example.effective_receptive_field || {}) ||
+    example.left_context_ending_at_target ||
+    example.marked_context ||
+    example.target_token ||
+    example.text ||
+    ""
+  );
+}
+
+function jumpContext(example) {
+  const erf = example.effective_receptive_field || {};
+  const jump = erf.largest_observed_relative_score_jump || {};
+  const targetLength = Number(jump.to_context_length);
+  if (!Number.isFinite(targetLength)) return "";
+  const rows = erf.key_tested_context_lengths || erf.tested_context_lengths || [];
+  const row = rows.find(item => Number(item.context_length) === targetLength);
+  return row?.left_context_ending_at_target || "";
+}
+
+function bestContext(erf) {
+  const rows = erf.key_tested_context_lengths || erf.tested_context_lengths || [];
+  if (!rows.length) return "";
+  const last = rows[rows.length - 1] || {};
+  return last.left_context_ending_at_target || "";
+}
+
+function featureUrl(featureId) {
+  const params = new URLSearchParams({ model: state.model, layer: state.layer, feature: String(featureId) });
+  return `/feature?${params.toString()}`;
+}
+
+function setStatus(message) {
+  els.status.textContent = message;
+}
+
+async function copyText(text) {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+}
+
+function fmt(value, digits) {
+  if (value === null || value === undefined || value === "") return "?";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(digits) : "?";
+}
+
+function pct(value, digits) {
+  if (value === null || value === undefined || value === "") return "?";
+  const number = Number(value);
+  return Number.isFinite(number) ? `${(100 * number).toFixed(digits)}%` : "?";
+}
+
+function per10k(value, digits) {
+  if (value === null || value === undefined || value === "") return "?";
+  const number = Number(value);
+  return Number.isFinite(number) ? (10000 * number).toFixed(digits) : "?";
+}
+
+function visibleToken(value) {
+  const text = String(value ?? "");
+  if (text === " ") return "[space]";
+  if (text === "\n") return "[newline]";
+  return text.replace(/\r/g, "\\r").replace(/\n/g, "\\n").replace(/\t/g, "\\t");
+}
+
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+function escAttr(value) {
+  return esc(value).replace(/`/g, "&#96;");
+}
+
+init().catch(error => {
+  els.message.className = "error";
+  els.message.textContent = error.message || String(error);
+  setStatus("Feature unavailable");
+});
+</script>
+</body>
+</html>

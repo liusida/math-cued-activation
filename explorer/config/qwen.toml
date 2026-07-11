@@ -1,0 +1,52 @@
+[artifact]
+name = "v9_qwen3_5_2b_base_post_block_activations"
+run_dir = "qwen3_5_2b_base_post_block_tok1000000"
+
+[output]
+root = "/home/liusida/research/ICA-paper/data/activations_v9"
+
+[model]
+id = "Qwen/Qwen3.5-2B-Base"
+short_name = "qwen3_5_2b_base"
+dtype = "bfloat16"
+
+[sae_counterpart]
+source = "custom_checkpoint"
+repo_id = "Qwen/SAE-Res-Qwen3.5-2B-Base-W32K-L0_50"
+sae_model_name = "Qwen/Qwen3.5-2B-Base"
+hidden_size = 2048
+hook_name_template = "blocks.{layer}.hook_resid_post"
+release_name_template = "qwen_scope_res_w32k_l0_50_layer_{layer}"
+checkpoint_template = "layer{layer}.sae.pt"
+checkpoint_format = "torch"
+decoder_key = "W_dec"
+activation = "topk"
+top_k = 50
+apply_b_dec_to_input = false
+normalize_activations = "none"
+
+[dataset]
+path = "NeelNanda/pile-10k"
+name = ""
+split = "train"
+text_column = "text"
+streaming = false
+context_length = 1024
+token_budget = 1_000_000
+
+[capture]
+run_name = "qwen3_5_2b_base_post_block"
+seed = 0
+activation_dtype = "bfloat16"
+shard_token_budget = 250_000
+sampling_policy = "random_token_positions_without_exclusion"
+activation_site = "post_transformer_block_output_before_final_model_norm"
+site_note = "Captured with v9 forward hooks on transformer block outputs, before the final model norm."
+
+[smoke]
+layers = ["layer_00", "layer_12", "layer_23"]
+rows_per_layer = 8
+shard_index = 0
+row_selection = "evenly_spaced"
+atol = 0.0
+rtol = 0.0

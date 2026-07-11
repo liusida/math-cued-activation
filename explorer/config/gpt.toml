@@ -1,0 +1,52 @@
+[artifact]
+name = "v9_gpt2_post_block_activations"
+run_dir = "gpt2_post_block_tok1000000"
+
+[output]
+root = "/home/liusida/research/ICA-paper/data/activations_v9"
+
+[model]
+id = "openai-community/gpt2"
+short_name = "gpt2"
+dtype = "bfloat16"
+
+[sae_counterpart]
+source = "sae_lens_registry"
+repo_id = "jbloom/GPT2-Small-OAI-v5-32k-resid-post-SAEs"
+sae_model_name = "gpt2-small"
+hidden_size = 768
+hook_name_template = "blocks.{layer}.hook_resid_post"
+release_pattern = "gpt2-small-resid-post-v5-32k"
+id_pattern_template = "blocks\\.{layer}\\.hook_resid_post"
+checkpoint_template = "v5_32k_layer_{layer}.pt/sae_weights.safetensors"
+checkpoint_format = "safetensors"
+activation = "topk"
+top_k = 32
+apply_b_dec_to_input = true
+normalize_activations = "layer_norm"
+
+[dataset]
+path = "NeelNanda/pile-10k"
+name = ""
+split = "train"
+text_column = "text"
+streaming = false
+context_length = 1024
+token_budget = 1_000_000
+
+[capture]
+run_name = "gpt2_post_block"
+seed = 0
+activation_dtype = "bfloat16"
+shard_token_budget = 250_000
+sampling_policy = "random_token_positions_without_exclusion"
+activation_site = "post_transformer_block_output_before_final_model_norm"
+site_note = "Captured with v9 forward hooks on transformer block outputs, before the final model norm."
+
+[smoke]
+layers = ["layer_00", "layer_06", "layer_11"]
+rows_per_layer = 8
+shard_index = 0
+row_selection = "evenly_spaced"
+atol = 0.0
+rtol = 0.0

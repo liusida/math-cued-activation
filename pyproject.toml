@@ -1,21 +1,31 @@
 [project]
-name = "try-vibethinker-3b"
+name = "Math-Cued-Activation"
 version = "0.1.0"
-description = "Small local inference script for WeiboAI/VibeThinker-3B"
-requires-python = ">=3.10"
+description = "Manifest-driven response, activation, ICA, and feature Explorer pipeline"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "datasets",
+    "fastapi>=0.115",
     "fastica-torch",
     "gb10-load-llm",
     "matplotlib",
     "networkx",
+    "pydantic>=2.10",
     "scipy",
     "torch",
     "transformers>=4.54.0",
+    "uvicorn>=0.30",
+    "vllm",
 ]
 
 [tool.uv]
 package = false
+
+[dependency-groups]
+dev = ["pytest>=9"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.uv.sources]
 fastica-torch = { path = "vendor/FastICA_torch" }

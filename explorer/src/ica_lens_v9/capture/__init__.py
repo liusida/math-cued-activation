@@ -1,0 +1,1 @@
+"""Activation capture pipeline."""

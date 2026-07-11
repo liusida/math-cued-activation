@@ -35,6 +35,11 @@ outputs/
 logs/
 *.log
 
+# Generated/migrated Explorer data (source code under explorer/ remains tracked)
+explorer/feature_index.sqlite*
+explorer/runs/
+explorer/annotations/
+
 # Large model / tensor artifacts
 *.pt
 *.pth
