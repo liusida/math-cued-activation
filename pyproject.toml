@@ -5,6 +5,7 @@ description = "Small local inference script for WeiboAI/VibeThinker-3B"
 requires-python = ">=3.10"
 dependencies = [
     "datasets",
+    "fastica-torch",
     "gb10-load-llm",
     "matplotlib",
     "networkx",
@@ -15,3 +16,6 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+fastica-torch = { path = "vendor/FastICA_torch" }

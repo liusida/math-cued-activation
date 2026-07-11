@@ -642,6 +642,26 @@ wheels = [
 ]
 
 [[package]]
+name = "fastica-torch"
+version = "0.1.1"
+source = { directory = "vendor/FastICA_torch" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "torch" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=1.20" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
+    { name = "scikit-learn", marker = "extra == 'dev'", specifier = ">=1.0" },
+    { name = "torch", specifier = ">=2.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "filelock"
 version = "3.29.5"
 source = { registry = "https://pypi.org/simple" }
@@ -2980,6 +3000,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "datasets" },
+    { name = "fastica-torch" },
     { name = "gb10-load-llm" },
     { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "matplotlib", version = "3.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -2995,6 +3016,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "datasets" },
+    { name = "fastica-torch", directory = "vendor/FastICA_torch" },
     { name = "gb10-load-llm" },
     { name = "matplotlib" },
     { name = "networkx" },

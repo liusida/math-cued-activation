@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fit FastICA on a balanced mix of Qwen and VibeThinker IMO activations."""
+"""Fit FastICA on Qwen and/or VibeThinker IMO activations."""
 
 from __future__ import annotations
 
@@ -14,12 +14,11 @@ import torch
 import torch.nn.functional as F
 from tqdm.auto import tqdm
 
-from fastica_torch import FastICA
-
 
 DATASET_SLUG = "OpenEvals__IMO-AnswerBench"
 QWEN_SLUG = "Qwen__Qwen2.5-Coder-3B-Instruct"
 VIBETHINKER_SLUG = "WeiboAI__VibeThinker-3B"
+DEFAULT_VIBETHINKER_ONLY_ACTIVATIONS = 1_000_000
 
 
 @dataclass(frozen=True)
@@ -32,8 +31,8 @@ class ActivationFile:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Load Qwen activations, sample a matching number of VibeThinker "
-            "activations, mix them, L2-normalize rows, and fit c=d FastICA."
+            "Load saved activation rows, L2-normalize them, and fit c=d FastICA. "
+            "Default fits 1M sampled VibeThinker activation rows."
         )
     )
     parser.add_argument(
@@ -45,6 +44,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--qwen-slug", default=QWEN_SLUG)
     parser.add_argument("--vibethinker-slug", default=VIBETHINKER_SLUG)
     parser.add_argument("--layer", type=int, default=32)
+    parser.add_argument(
+        "--source",
+        choices=["vibethinker", "qwen", "mixed"],
+        default="vibethinker",
+        help="Activation source to fit. mixed keeps the old Qwen/VibeThinker balanced path.",
+    )
     parser.add_argument(
         "--max-qwen-activations",
         "--max-qwen-activation",
@@ -59,7 +64,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         help=(
             "Maximum VibeThinker activation rows/tokens to sample. "
-            "Default: same count as selected Qwen rows."
+            "Default: 1,000,000 for --source vibethinker; same count as selected Qwen rows for --source mixed."
         ),
     )
     parser.add_argument("--seed", type=int, default=0)
@@ -207,9 +212,14 @@ def choose_device(name: str) -> torch.device:
     return torch.device(name)
 
 
-def default_output_path(layer: int, hidden_size: int, max_iter: int) -> Path:
+def default_output_path(source: str, layer: int, hidden_size: int, max_iter: int) -> Path:
+    source_slug = {
+        "vibethinker": "vibethinker_only",
+        "qwen": "qwen_only",
+        "mixed": "qwen_vibethinker_mixed",
+    }[source]
     return Path("results") / "ica" / (
-        f"qwen_vibethinker_mixed_layer{layer:02d}_c{hidden_size}_iter{max_iter}.pt"
+        f"{source_slug}_layer{layer:02d}_c{hidden_size}_iter{max_iter}.pt"
     )
 
 
@@ -269,64 +279,103 @@ def main() -> None:
         args.activation_root, args.dataset_slug, args.vibethinker_slug, args.layer
     )
 
-    qwen_files = list_activation_files(qwen_dir, desc="Qwen", progress=progress)
-    vibethinker_files = list_activation_files(
-        vibethinker_dir, desc="VibeThinker", progress=progress
-    )
-    hidden_size = qwen_files[0].hidden_size
-    if vibethinker_files[0].hidden_size != hidden_size:
-        raise ValueError(
-            f"Hidden size mismatch: Qwen={hidden_size}, "
-            f"VibeThinker={vibethinker_files[0].hidden_size}"
+    qwen_files: list[ActivationFile] = []
+    vibethinker_files: list[ActivationFile] = []
+    if args.source in {"qwen", "mixed"}:
+        qwen_files = list_activation_files(qwen_dir, desc="Qwen", progress=progress)
+    if args.source in {"vibethinker", "mixed"}:
+        vibethinker_files = list_activation_files(
+            vibethinker_dir, desc="VibeThinker", progress=progress
         )
+
+    hidden_sizes = {
+        files[0].hidden_size
+        for files in (qwen_files, vibethinker_files)
+        if files
+    }
+    if len(hidden_sizes) != 1:
+        raise ValueError(f"Hidden size mismatch across selected sources: {sorted(hidden_sizes)}")
+    hidden_size = hidden_sizes.pop()
 
     qwen_total = sum(file.rows for file in qwen_files)
     vibethinker_total = sum(file.rows for file in vibethinker_files)
-    qwen_target = min(qwen_total, args.max_qwen_activations or qwen_total)
-    vibethinker_cap = args.max_vibethinker_activations
-    vibethinker_target = min(vibethinker_total, vibethinker_cap or qwen_target)
+    qwen_target = (
+        min(qwen_total, args.max_qwen_activations or qwen_total)
+        if qwen_files
+        else 0
+    )
+    if args.source == "vibethinker":
+        vibethinker_cap = args.max_vibethinker_activations or DEFAULT_VIBETHINKER_ONLY_ACTIVATIONS
+    elif args.source == "mixed":
+        vibethinker_cap = args.max_vibethinker_activations or qwen_target
+    else:
+        vibethinker_cap = 0
+    vibethinker_target = min(vibethinker_total, vibethinker_cap) if vibethinker_files else 0
 
-    print(f"Qwen activation rows available: {qwen_total:,}")
-    print(f"VibeThinker activation rows available: {vibethinker_total:,}")
-    print(f"Selected Qwen rows: {qwen_target:,}")
-    print(f"Selected VibeThinker rows: {vibethinker_target:,}")
+    print(f"Source: {args.source}")
+    if qwen_files:
+        print(f"Qwen activation rows available: {qwen_total:,}")
+        print(f"Selected Qwen rows: {qwen_target:,}")
+    if vibethinker_files:
+        print(f"VibeThinker activation rows available: {vibethinker_total:,}")
+        print(f"Selected VibeThinker rows: {vibethinker_target:,}")
     print(f"Hidden size / ICA components: {hidden_size}")
 
     if args.dry_run:
         return
 
-    if qwen_target + vibethinker_target < hidden_size:
+    selected_total = qwen_target + vibethinker_target
+    if selected_total < hidden_size:
         raise SystemExit(
             f"Need at least {hidden_size:,} total selected rows for c=d FastICA, "
-            f"got {qwen_target + vibethinker_target:,}. Increase the activation caps."
+            f"got {selected_total:,}. Increase the activation caps."
         )
 
-    qwen_rows = choose_global_rows(qwen_total, qwen_target, rng)
-    vibethinker_rows = choose_global_rows(vibethinker_total, vibethinker_target, rng)
+    chunks: list[torch.Tensor] = []
+    label_chunks: list[torch.Tensor] = []
+    data_sections: dict[str, dict] = {}
 
-    qwen_X, qwen_manifest = load_selected_activations(
-        qwen_files, qwen_rows, label="Qwen", dtype=fit_dtype, progress=progress
-    )
-    vibethinker_X, vibethinker_manifest = load_selected_activations(
-        vibethinker_files,
-        vibethinker_rows,
-        label="VibeThinker",
-        dtype=fit_dtype,
-        progress=progress,
-    )
-    X = torch.cat([qwen_X, vibethinker_X], dim=0)
-    labels = torch.cat(
-        [
-            torch.zeros(qwen_X.shape[0], dtype=torch.long),
-            torch.ones(vibethinker_X.shape[0], dtype=torch.long),
-        ],
-        dim=0,
-    )
+    if qwen_target:
+        qwen_rows = choose_global_rows(qwen_total, qwen_target, rng)
+        qwen_X, qwen_manifest = load_selected_activations(
+            qwen_files, qwen_rows, label="Qwen", dtype=fit_dtype, progress=progress
+        )
+        chunks.append(qwen_X)
+        label_chunks.append(torch.zeros(qwen_X.shape[0], dtype=torch.long))
+        data_sections["qwen"] = {
+            "model_slug": args.qwen_slug,
+            "available_rows": qwen_total,
+            "selected_rows": int(qwen_X.shape[0]),
+            "files": qwen_manifest,
+        }
+
+    if vibethinker_target:
+        vibethinker_rows = choose_global_rows(vibethinker_total, vibethinker_target, rng)
+        vibethinker_X, vibethinker_manifest = load_selected_activations(
+            vibethinker_files,
+            vibethinker_rows,
+            label="VibeThinker",
+            dtype=fit_dtype,
+            progress=progress,
+        )
+        chunks.append(vibethinker_X)
+        label_chunks.append(torch.ones(vibethinker_X.shape[0], dtype=torch.long))
+        data_sections["vibethinker"] = {
+            "model_slug": args.vibethinker_slug,
+            "available_rows": vibethinker_total,
+            "selected_rows": int(vibethinker_X.shape[0]),
+            "files": vibethinker_manifest,
+        }
+
+    X = torch.cat(chunks, dim=0)
+    labels = torch.cat(label_chunks, dim=0)
 
     device = choose_device(args.device)
     print(f"Training matrix: {tuple(X.shape)} {X.dtype}")
     print(f"FastICA device: {device}")
     X = X.to(device)
+
+    from fastica_torch import FastICA
 
     ica = FastICA(
         n_components=hidden_size,
@@ -341,7 +390,7 @@ def main() -> None:
     )
     ica.fit(X)
 
-    output = args.output or default_output_path(args.layer, hidden_size, args.max_iter)
+    output = args.output or default_output_path(args.source, args.layer, hidden_size, args.max_iter)
     output.parent.mkdir(parents=True, exist_ok=True)
     artifact = {
         "schema": "math_cued_fastica_v1",
@@ -356,21 +405,11 @@ def main() -> None:
         "config": vars(args),
         "data": {
             "dataset_slug": args.dataset_slug,
+            "source": args.source,
             "layer": args.layer,
             "hidden_size": hidden_size,
             "normalization": "per-row L2 before FastICA whitening",
-            "qwen": {
-                "model_slug": args.qwen_slug,
-                "available_rows": qwen_total,
-                "selected_rows": int(qwen_X.shape[0]),
-                "files": qwen_manifest,
-            },
-            "vibethinker": {
-                "model_slug": args.vibethinker_slug,
-                "available_rows": vibethinker_total,
-                "selected_rows": int(vibethinker_X.shape[0]),
-                "files": vibethinker_manifest,
-            },
+            **data_sections,
         },
     }
     torch.save(artifact, output)
