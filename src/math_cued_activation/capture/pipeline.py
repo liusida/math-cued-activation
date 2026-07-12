@@ -5,11 +5,14 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from types import SimpleNamespace
 
 import torch
 from tqdm.auto import tqdm
 
-from run_vibethinker import (
+from ..config import PipelineConfig
+from ..datasets import build_prompt, load_rows
+from .._compat_scripts.run_vibethinker import (
     DEFAULT_MODEL,
     build_imo_answerbench_prompt,
     extract_final_answer_text,
@@ -191,15 +194,42 @@ def sanity_check_next_token_predictions(
     )
 
 
-def main() -> None:
-    args = parse_args()
-    rows = load_imo_answerbench_rows(
-        args.sample_size,
-        args.seed,
-        args.problem_id,
-        args.start_index,
-        args.shuffle,
+def capture_from_config(config: PipelineConfig, *, layer: int) -> None:
+    args = SimpleNamespace(
+        model=config.model.id,
+        sample_size=config.dataset.sample_size,
+        start_index=config.dataset.start_index,
+        shuffle=False,
+        seed=config.ica.seed,
+        problem_id=None,
+        answer_only=config.prompt.answer_only,
+        device="cuda",
+        dtype=config.model.dtype,
+        generated_text_dir=config.storage.responses,
+        activation_dir=config.storage.activations,
+        capture_layer=layer,
+        activation_dtype=config.capture.activation_dtype,
+        sanity_check_next_token=config.capture.sanity_check_next_token,
+        sanity_check_max_positions=256,
+        sanity_check_chunk_size=64,
+        sanity_check_strict_top1=False,
+        capture_prompt_activations=config.capture.capture_prompt_activations,
+        pipeline_config=config,
     )
+    run_capture(args)
+
+
+def run_capture(args: argparse.Namespace | SimpleNamespace) -> None:
+    if getattr(args, "pipeline_config", None) is not None:
+        rows = load_rows(args.pipeline_config)
+    else:
+        rows = load_imo_answerbench_rows(
+            args.sample_size,
+            args.seed,
+            args.problem_id,
+            args.start_index,
+            args.shuffle,
+        )
     if not rows:
         raise SystemExit("No IMO-AnswerBench rows matched the request.")
 
@@ -219,7 +249,10 @@ def main() -> None:
         )
 
         metadata, metadata_path = load_imo_generation_bundle(args.generated_text_dir, row, model_id)
-        prompt = build_imo_answerbench_prompt(row["Problem"], args.answer_only)
+        if getattr(args, "pipeline_config", None) is not None:
+            prompt = build_prompt(args.pipeline_config, row)
+        else:
+            prompt = build_imo_answerbench_prompt(row["Problem"], args.answer_only)
         if metadata["text"]["prompt"] != prompt:
             raise SystemExit(
                 f"Saved prompt mismatch for {row['Problem ID']}. "
@@ -291,6 +324,7 @@ def main() -> None:
             prompt=prompt,
             result=result,
             write_sidecars=False,
+            dataset_id=(args.pipeline_config.dataset.id if getattr(args, "pipeline_config", None) is not None else "OpenEvals/IMO-AnswerBench"),
         )
 
         prediction = extract_final_answer_text(result.text)
@@ -320,6 +354,10 @@ def main() -> None:
 
     print("=" * 80)
     print(f"Exact-match score: {correct}/{len(rows)}")
+
+
+def main() -> None:
+    run_capture(parse_args())
 
 
 if __name__ == "__main__":

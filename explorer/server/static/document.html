@@ -58,9 +58,11 @@
       color: #94a3b8;
       background: rgba(148, 163, 184, 0.10);
     }
+    #activation-error { margin-bottom: 12px; }
   </style>
 </head>
 <body>
+  <div id="activation-error" class="error" hidden></div>
   <pre id="doc"></pre>
 
 <script>
@@ -74,6 +76,7 @@ const layer = params.get("layer") || "";
 const feature = params.get("feature") || "";
 const els = {
   doc: document.getElementById("doc"),
+  activationError: document.getElementById("activation-error"),
 };
 let rawText = "";
 
@@ -111,9 +114,12 @@ async function loadActivationOverlay() {
   if (position !== "") query.set("position", position);
   try {
     const out = await api(`/api/document-activations?${query.toString()}`);
+    els.activationError.hidden = true;
     renderActivationDocument(out.text || rawText, out.spans || [], out.activation_prefix_end);
   } catch (error) {
     console.error("Failed to load activation overlay", error);
+    els.activationError.textContent = `Activation map failed: ${error.message || error}`;
+    els.activationError.hidden = false;
   }
 }
 

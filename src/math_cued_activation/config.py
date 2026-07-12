@@ -30,6 +30,7 @@ class DatasetConfig:
     answer_field: str
     sample_size: int
     start_index: int = 0
+    config_name: str | None = None
 
 
 @dataclass(frozen=True)

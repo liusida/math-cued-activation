@@ -17,6 +17,7 @@ from tqdm.auto import tqdm
 from types import SimpleNamespace
 
 from ..config import PipelineConfig
+from ..datasets import build_prompt, load_rows
 from .._compat_scripts.run_vibethinker import (
     DEFAULT_MODEL,
     GenerationResult,
@@ -208,7 +209,10 @@ def build_result(
 
 
 def generate_one(args: argparse.Namespace, api_key: str, tokenizer, row: dict, row_number: int) -> tuple[str, Path, bool]:
-    prompt = build_imo_answerbench_prompt(row["Problem"], args.answer_only)
+    if getattr(args, "pipeline_config", None) is not None:
+        prompt = build_prompt(args.pipeline_config, row)
+    else:
+        prompt = build_imo_answerbench_prompt(row["Problem"], args.answer_only)
     response = call_with_retries(args, api_key, prompt)
     choices = response.get("choices") or []
     if not choices:
@@ -234,6 +238,7 @@ def generate_one(args: argparse.Namespace, api_key: str, tokenizer, row: dict, r
         prompt=prompt,
         result=result,
         flat=True,
+        dataset_id=(args.pipeline_config.dataset.id if getattr(args, "pipeline_config", None) is not None else "OpenEvals/IMO-AnswerBench"),
     )
 
     prediction = extract_final_answer_text(result.text)
@@ -267,6 +272,7 @@ def generate_from_config(config: PipelineConfig, *, force: bool = False) -> None
         rerun_existing=force,
         tokenizer_model=config.model.tokenizer,
         no_token_ids=False,
+        pipeline_config=config,
     )
     run_generation(args)
 
@@ -278,13 +284,16 @@ def run_generation(args: argparse.Namespace | SimpleNamespace) -> None:
         raise SystemExit("--context-window must be at least 1.")
     api_key = read_api_key(args.api_key_file)
 
-    rows = load_imo_answerbench_rows(
-        args.sample_size,
-        args.seed,
-        args.problem_id,
-        args.start_index,
-        args.shuffle,
-    )
+    if getattr(args, "pipeline_config", None) is not None:
+        rows = load_rows(args.pipeline_config)
+    else:
+        rows = load_imo_answerbench_rows(
+            args.sample_size,
+            args.seed,
+            args.problem_id,
+            args.start_index,
+            args.shuffle,
+        )
     if not rows:
         raise SystemExit("No IMO-AnswerBench rows matched the request.")
 

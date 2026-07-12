@@ -2,6 +2,7 @@ from pathlib import Path
 
 from math_cued_activation.config import load_config
 from math_cued_activation.generation import vllm
+from math_cued_activation.stages import checkpoint_path
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,3 +33,9 @@ def test_qwen_smoke_uses_eager_vllm() -> None:
     assert config.vllm.enforce_eager is True
     assert config.vllm.gpu_memory_utilization == 0.75
     assert config.vllm.max_model_len == 32768
+    assert checkpoint_path(config, 19).name == "qwen_qwen2_5_coder_3b_instruct_layer19_c2048_iter10.pt"
+
+
+def test_vibethinker_keeps_legacy_checkpoint_name() -> None:
+    config = load_config(ROOT / "configs" / "vibethinker_imo.toml")
+    assert checkpoint_path(config, 20).name == "vibethinker_only_layer20_c2048_iter100.pt"

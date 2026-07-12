@@ -651,7 +651,12 @@ def document_activations(
         raise HTTPException(status_code=404, detail=f"Unknown model: {model}")
     manifest_path = _activation_manifest_path(run_id)
     if manifest_path is None:
-        source_path = _math_cued_source_path_for_doc(run_id=run_id, layer=layer, doc_id=doc_id)
+        source_path = _math_cued_source_path_for_doc(
+            run_id=run_id,
+            layer=layer,
+            feature_id=int(feature),
+            doc_id=doc_id,
+        )
         if source_path is None or not source_path.is_file():
             raise HTTPException(status_code=404, detail=f"No captured activations for {model} document {doc_id}")
         try:
@@ -2154,21 +2159,27 @@ def _load_document_text_from_feature_evidence(*, run_id: str, layer: str | None,
     return _load_math_cued_source_text(str(source_path))
 
 
-def _math_cued_source_path_for_doc(*, run_id: str, layer: str, doc_id: str) -> Path | None:
-    model_slug = None
-    if "vibethinker" in run_id:
-        model_slug = "WeiboAI__VibeThinker-3B"
-    elif "qwen" in run_id:
-        model_slug = "Qwen__Qwen2.5-Coder-3B-Instruct"
-    if model_slug is None:
+def _math_cued_source_path_for_doc(*, run_id: str, layer: str, feature_id: int, doc_id: str) -> Path | None:
+    """Resolve a captured document from feature evidence, without path maps."""
+    with connect(DB_PATH) as conn:
+        row = conn.execute(
+            """
+            SELECT annotation_evidence_json
+            FROM features
+            WHERE run_id = ? AND layer = ? AND feature_id = ?
+            """,
+            (run_id, layer, int(feature_id)),
+        ).fetchone()
+    if row is None or not row["annotation_evidence_json"]:
         return None
-    return (
-        Path("/home/liusida/data/ICA-data/math-cued-activation")
-        / "OpenEvals__IMO-AnswerBench"
-        / model_slug
-        / layer
-        / f"{doc_id}.pt"
-    )
+    try:
+        evidence = json.loads(str(row["annotation_evidence_json"]))
+    except json.JSONDecodeError:
+        return None
+    for example in evidence.get("examples") or []:
+        if str(example.get("doc_id")) == str(doc_id) and example.get("source_path"):
+            return Path(str(example["source_path"]))
+    return None
 
 
 @lru_cache(maxsize=256)

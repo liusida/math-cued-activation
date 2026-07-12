@@ -905,6 +905,7 @@ def build_imo_generation_metadata(
     model_id: str,
     prompt: str,
     result: GenerationResult,
+    dataset_id: str = IMO_ANSWERBENCH_ID,
 ) -> dict:
     return {
         "schema": "imo_answerbench_generation_v1",
@@ -917,7 +918,7 @@ def build_imo_generation_metadata(
             "generated": result.text,
         },
         "problem": {
-            "dataset": IMO_ANSWERBENCH_ID,
+            "dataset": dataset_id,
             "row_number": row_number,
             "dataset_index": row.get("_dataset_index"),
             "problem_id": row["Problem ID"],
@@ -946,6 +947,7 @@ def save_imo_generation_bundle(
     prompt: str,
     result: GenerationResult,
     flat: bool = False,
+    dataset_id: str = IMO_ANSWERBENCH_ID,
 ) -> Path:
     if flat:
         output_dir = output_dir.expanduser()
@@ -953,7 +955,7 @@ def save_imo_generation_bundle(
     else:
         output_dir = generated_text_output_dir(
             root=output_dir,
-            dataset_id=IMO_ANSWERBENCH_ID,
+            dataset_id=dataset_id,
             model_id=model_id,
         )
         storage_root = output_dir.parents[1]
@@ -967,6 +969,7 @@ def save_imo_generation_bundle(
         model_id=model_id,
         prompt=prompt,
         result=result,
+        dataset_id=dataset_id,
     )
     metadata["storage"] = {
         "root": str(storage_root),
@@ -1041,6 +1044,7 @@ def save_imo_activation_bundle(
     prompt: str,
     result: GenerationResult,
     write_sidecars: bool = True,
+    dataset_id: str = IMO_ANSWERBENCH_ID,
 ) -> Path | None:
     capture = result.activation_capture
     if capture is None:
@@ -1048,7 +1052,7 @@ def save_imo_activation_bundle(
 
     output_dir = activation_output_dir(
         root=output_dir,
-        dataset_id=IMO_ANSWERBENCH_ID,
+        dataset_id=dataset_id,
         model_id=model_id,
         layer=capture.layer,
     )
@@ -1144,7 +1148,7 @@ def save_imo_activation_bundle(
             "generated": result.text,
         },
         "problem": {
-            "dataset": IMO_ANSWERBENCH_ID,
+            "dataset": dataset_id,
             "row_number": row_number,
             "dataset_index": row.get("_dataset_index"),
             "problem_id": row["Problem ID"],

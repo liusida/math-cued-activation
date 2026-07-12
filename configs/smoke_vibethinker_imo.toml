@@ -13,9 +13,9 @@ dtype = "auto"
 id = "OpenEvals/IMO-AnswerBench"
 split = "train"
 revision = "main"
-id_field = "id"
-prompt_field = "problem"
-answer_field = "answer"
+id_field = "Problem ID"
+prompt_field = "Problem"
+answer_field = "Short Answer"
 sample_size = 5
 start_index = 0
 

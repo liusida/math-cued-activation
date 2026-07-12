@@ -69,6 +69,7 @@ See [`PIPELINE.md`](PIPELINE.md) for stage invariants and artifact details.
 See [`explorer/README.md`](explorer/README.md) for the boundary between tracked
 Explorer source and ignored runtime artifacts.
 
-Generation is implemented as an importable backend under
-`src/math_cued_activation/generation/`. Capture and ICA still retain private
-format-compatibility implementations while they are migrated incrementally.
+Generation and teacher-forced capture are importable pipelines under
+`src/math_cued_activation/generation/` and `src/math_cued_activation/capture/`.
+ICA still retains a private format-compatibility implementation while it is
+migrated incrementally.
